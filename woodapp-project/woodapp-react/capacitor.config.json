@@ -1,0 +1,13 @@
+{
+  "appId": "com.woodapp.calculator",
+  "appName": "WoodApp",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["192.168.*.*", "10.*.*.*", "172.16.*.*", "localhost"]
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains secrets!)
+.env
+
+# Build output
+dist/
+
+# Android build files
+woodapp-project/woodapp-react/android/.gradle/
+woodapp-project/woodapp-react/android/build/
+woodapp-project/woodapp-react/android/app/build/
+woodapp-project/woodapp-react/android/capacitor-cordova-android-plugins/build/
+woodapp-project/woodapp-react/android/local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Database
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db

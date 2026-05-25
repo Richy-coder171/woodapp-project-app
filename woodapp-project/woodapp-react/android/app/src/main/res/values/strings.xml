@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WoodApp</string>
+    <string name="title_activity_main">WoodApp</string>
+    <string name="package_name">com.woodapp.calculator</string>
+    <string name="custom_url_scheme">com.woodapp.calculator</string>
+</resources>

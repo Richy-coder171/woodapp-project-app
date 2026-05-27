@@ -216,20 +216,20 @@ app.get('/api/me', auth, (req, res) => {
 // ================= AI SCAN ROUTE =================
 
 const PROMPT = `You are a wood log volume calculator assistant.
-The image has handwritten lines like "4 x 12" or "7 x 36".
-Both numbers are in ft.in format (feet and inches written together):
+The image shows handwritten measurement lines like "4 x 12" or "7 x 36".
+First number = radius in plain inches (e.g. 4 = 4 inches).
+Second number = height in ft.in format:
 - "12" means 1 foot 2 inches = 14 inches total
 - "36" means 3 feet 6 inches = 42 inches total
-- "7" means 7 feet 0 inches = 84 inches total
-Extract EVERY line exactly as written. Do NOT convert or calculate — just read the two raw numbers.
-Respond ONLY as raw JSON, no markdown:
+Extract EVERY line exactly as written. Do NOT convert — return raw numbers only.
+Respond ONLY as raw JSON, no markdown, no extra text:
 {"entries":[{"a_raw":"4","b_raw":"12"},{"a_raw":"7","b_raw":"36"}]}`;
 
 const MODELS = [
+  'google/gemma-3-27b-it:free',
+  'google/gemma-3-12b-it:free',
   'meta-llama/llama-3.2-11b-vision-instruct:free',
-  'google/gemma-4-27b-a4b-it:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'meta-llama/llama-3.2-11b-vision-instruct',
+  'meta-llama/llama-4-scout:free',
   'openrouter/auto'
 ];
 

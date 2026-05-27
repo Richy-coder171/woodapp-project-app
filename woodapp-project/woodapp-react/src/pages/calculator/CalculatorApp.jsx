@@ -12,10 +12,11 @@ import LoadingScreen from './components/LoadingScreen';
 import ResultsScreen from './components/ResultsScreen';
 import HistoryScreen from './components/HistoryScreen';
 import OfflineScreen from './components/OfflineScreen';
+import SkeletonScreen from './components/SkeletonScreen';
 import AdminDashboard from '../admin/AdminDashboard';
 
 export default function CalculatorApp() {
-  const [screen, setScreen]               = useState('auth');
+  const [screen, setScreen]               = useState(() => localStorage.getItem('wood_auth_token') ? 'skeleton' : 'auth');
   const [authToken, setAuthToken]         = useState(() => localStorage.getItem('wood_auth_token'));
   const [entries, setEntries]             = useState([]);
   const [capturedB64, setCapturedB64]     = useState(null);
@@ -234,6 +235,7 @@ export default function CalculatorApp() {
         <div className="formula-badge">V = π × r² × h &nbsp;|&nbsp; Radius: ft.in &nbsp;|&nbsp; Height: ft</div>
       </header>
 
+      {screen === 'skeleton'&& <SkeletonScreen />}
       {screen === 'auth'    && <AuthScreen    {...props} />}
       {screen === 'sub'     && <SubScreen     {...props} />}
       {screen === 'idle'    && <IdleScreen    {...props} />}

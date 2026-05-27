@@ -140,7 +140,7 @@ app.post('/api/register', async (req, res) => {
           return res.status(500).json({ error: 'Registration failed' });
         }
 
-        const token = jwt.sign({ id: this.lastID, email }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ id: this.lastID, email }, JWT_SECRET, { expiresIn: '30d' });
         res.json({
           token,
           user: {
@@ -177,7 +177,7 @@ app.post('/api/login', (req, res) => {
 
       const sub = checkSubscription(user);
       const limit = checkDailyLimit(user);
-      const token = jwt.sign({ id: user.id, email }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: user.id, email }, JWT_SECRET, { expiresIn: '30d' });
 
       res.json({
         token,

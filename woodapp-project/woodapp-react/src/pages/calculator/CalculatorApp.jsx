@@ -11,6 +11,7 @@ import PreviewScreen from './components/PreviewScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ResultsScreen from './components/ResultsScreen';
 import HistoryScreen from './components/HistoryScreen';
+import OfflineScreen from './components/OfflineScreen';
 import AdminDashboard from '../admin/AdminDashboard';
 
 export default function CalculatorApp() {
@@ -41,8 +42,25 @@ export default function CalculatorApp() {
   async function validateSession(token = authToken) {
     if (!token) { setScreen('auth'); return; }
     try {
-      const res  = await fetch(`${API_BASE}/me`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('Session invalid');
+      // Add timeout so it doesn't hang forever
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      const res  = await fetch(`${API_BASE}/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      // Token is invalid or expired → must login again
+      if (res.status === 401) {
+        localStorage.removeItem('wood_auth_token');
+        setAuthToken(null);
+        setScreen('auth');
+        return;
+      }
+
+      if (!res.ok) throw new Error('Server error');
       const data = await res.json();
 
       if (!data.subscription.active) {
@@ -58,10 +76,11 @@ export default function CalculatorApp() {
       setUserScans(scans);
       setUserInfo(`${data.email} · ${data.subscription.daysLeft} days remaining`);
       setScreen('idle');
-    } catch {
-      localStorage.removeItem('wood_auth_token');
-      setAuthToken(null);
-      setScreen('auth');
+    } catch (err) {
+      // Network error / timeout — DON'T clear the token!
+      // Keep the user logged in and show a retry option
+      console.log('Session validation failed (network):', err.message);
+      setScreen('offline');
     }
   }
 
@@ -223,6 +242,7 @@ export default function CalculatorApp() {
       {screen === 'loading' && <LoadingScreen {...props} />}
       {screen === 'results' && <ResultsScreen {...props} />}
       {screen === 'history' && <HistoryScreen {...props} />}
+      {screen === 'offline' && <OfflineScreen {...props} />}
       {screen === 'admin'   && (
         <div>
           <button

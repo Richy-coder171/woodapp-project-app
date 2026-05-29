@@ -10,13 +10,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-to-32-char-random-string-now';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'your-admin-secret-key-here';
-const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
-if (!OPENROUTER_KEY) {
-  console.error('ERROR: OPENROUTER_KEY environment variable required');
+if (!GEMINI_KEY) {
+  console.error('ERROR: GEMINI_API_KEY environment variable required');
+  console.error('Get a free key at: https://aistudio.google.com/apikey');
   process.exit(1);
 }
-console.log('OpenRouter Key loaded:', OPENROUTER_KEY.substring(0, 15) + '...');
+console.log('Gemini API Key loaded:', GEMINI_KEY.substring(0, 10) + '...');
 
 const DAILY_SCAN_LIMIT = 200;
 
@@ -213,7 +214,7 @@ app.get('/api/me', auth, (req, res) => {
   });
 });
 
-// ================= AI SCAN ROUTE =================
+// ================= AI SCAN ROUTE (Google Gemini — FREE) =================
 
 const PROMPT = `You are a wood log volume calculator assistant.
 The image shows handwritten measurement lines like "4 x 12" or "7 x 36".
@@ -225,12 +226,10 @@ Extract EVERY line exactly as written. Do NOT convert — return raw numbers onl
 Respond ONLY as raw JSON, no markdown, no extra text:
 {"entries":[{"a_raw":"4","b_raw":"12"},{"a_raw":"7","b_raw":"36"}]}`;
 
-const MODELS = [
-  'google/gemma-3-27b-it:free',
-  'google/gemma-3-12b-it:free',
-  'meta-llama/llama-3.2-11b-vision-instruct:free',
-  'meta-llama/llama-4-scout:free',
-  'openrouter/auto'
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro'
 ];
 
 app.post('/api/scan', auth, async (req, res) => {
@@ -262,58 +261,59 @@ app.post('/api/scan', auth, async (req, res) => {
     }
 
     let lastErr = '';
-    let lastResponse = null;
 
-    for (const model of MODELS) {
+    for (const model of GEMINI_MODELS) {
       try {
-        console.log(`[SCAN] Trying model: ${model}`);
+        console.log(`[SCAN] Trying Gemini model: ${model}`);
 
-        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+
+        const geminiRes = await fetch(geminiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENROUTER_KEY}`,
-            'HTTP-Referer': 'https://wood-calculator.app',
-            'X-Title': 'Wood Volume Calculator'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: model,
-            max_tokens: 800,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-                { type: 'text', text: PROMPT }
+            contents: [{
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: 'image/jpeg',
+                    data: imageBase64
+                  }
+                },
+                { text: PROMPT }
               ]
-            }]
+            }],
+            generationConfig: {
+              maxOutputTokens: 800,
+              temperature: 0.1
+            }
           })
         });
 
-        const data = await orRes.json();
-        console.log(`[SCAN] Model ${model} response status: ${orRes.status}`);
+        const data = await geminiRes.json();
+        console.log(`[SCAN] Gemini ${model} response status: ${geminiRes.status}`);
 
         if (data.error) {
           lastErr = `${model}: ${data.error.message || JSON.stringify(data.error)}`;
-          console.log(`[SCAN] Model ${model} error: ${lastErr}`);
+          console.log(`[SCAN] Gemini ${model} error: ${lastErr}`);
           continue;
         }
 
-        lastResponse = data;
-        let text = data.choices?.[0]?.message?.content || '';
-        console.log(`[SCAN] Model ${model} raw response:`, text.substring(0, 200));
+        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log(`[SCAN] Gemini ${model} raw response:`, text.substring(0, 200));
 
         text = text.replace(/```json|```/g, '').trim();
 
         const match = text.match(/\{[\s\S]*\}/);
         if (!match) {
           lastErr = `${model}: no JSON in response`;
-          console.log(`[SCAN] Model ${model}: no JSON found`);
+          console.log(`[SCAN] Gemini ${model}: no JSON found`);
           continue;
         }
 
         try {
           const parsed = JSON.parse(match[0]);
-          console.log(`[SCAN] Model ${model} parsed entries:`, parsed.entries?.length || 0);
+          console.log(`[SCAN] Gemini ${model} parsed entries:`, parsed.entries?.length || 0);
 
           incrementScanCount(user.id, (err) => {
             if (err) console.error('[SCAN] Failed to increment scan count:', err);
@@ -321,7 +321,7 @@ app.post('/api/scan', auth, async (req, res) => {
 
           res.json({
             success: true,
-            model: model,
+            model: `gemini:${model}`,
             entries: parsed.entries || [],
             scansRemaining: limit.remaining - 1
           });
@@ -329,16 +329,16 @@ app.post('/api/scan', auth, async (req, res) => {
 
         } catch (parseErr) {
           lastErr = `${model}: JSON parse error: ${parseErr.message}`;
-          console.log(`[SCAN] Model ${model} parse error:`, parseErr.message);
+          console.log(`[SCAN] Gemini ${model} parse error:`, parseErr.message);
         }
 
       } catch (ex) {
         lastErr = `${model}: ${ex.message}`;
-        console.log(`[SCAN] Model ${model} exception:`, ex.message);
+        console.log(`[SCAN] Gemini ${model} exception:`, ex.message);
       }
     }
 
-    console.log(`[SCAN] All models failed. Last error: ${lastErr}`);
+    console.log(`[SCAN] All Gemini models failed. Last error: ${lastErr}`);
     res.status(502).json({ error: 'All AI models failed', details: lastErr });
   });
 });
@@ -349,28 +349,23 @@ app.post('/api/test-scan', async (req, res) => {
   if (!imageBase64) return res.status(400).json({ error: 'Image required' });
 
   try {
-    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+
+    const geminiRes = await fetch(geminiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_KEY}`,
-        'HTTP-Referer': 'https://wood-calculator.app',
-        'X-Title': 'Wood Volume Calculator Test'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
-        max_tokens: 800,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-            { type: 'text', text: PROMPT }
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
+            { text: PROMPT }
           ]
-        }]
+        }],
+        generationConfig: { maxOutputTokens: 800, temperature: 0.1 }
       })
     });
-    const data = await orRes.json();
-    res.json({ status: orRes.status, openrouterResponse: data });
+    const data = await geminiRes.json();
+    res.json({ status: geminiRes.status, geminiResponse: data });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

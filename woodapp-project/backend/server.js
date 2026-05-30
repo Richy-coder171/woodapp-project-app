@@ -10,14 +10,17 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-to-32-char-random-string-now';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'your-admin-secret-key-here';
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_KEY = process.env.GROQ_API_KEY || '';
 
-if (!GEMINI_KEY) {
-  console.error('ERROR: GEMINI_API_KEY environment variable required');
-  console.error('Get a free key at: https://aistudio.google.com/apikey');
+if (!GEMINI_KEY && !GROQ_KEY) {
+  console.error('ERROR: At least one AI API key required.');
+  console.error('  GEMINI_API_KEY → https://aistudio.google.com/apikey (free)');
+  console.error('  GROQ_API_KEY   → https://console.groq.com/keys (free)');
   process.exit(1);
 }
-console.log('Gemini API Key loaded:', GEMINI_KEY.substring(0, 10) + '...');
+if (GEMINI_KEY) console.log('Gemini API Key loaded:', GEMINI_KEY.substring(0, 10) + '...');
+if (GROQ_KEY) console.log('Groq API Key loaded:', GROQ_KEY.substring(0, 10) + '...');
 
 const DAILY_SCAN_LIMIT = 200;
 
@@ -228,8 +231,8 @@ Respond ONLY as raw JSON, no markdown, no extra text:
 
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash-latest',
 ];
 
 app.post('/api/scan', auth, async (req, res) => {
@@ -293,6 +296,32 @@ app.post('/api/scan', auth, async (req, res) => {
         const data = await geminiRes.json();
         console.log(`[SCAN] Gemini ${model} response status: ${geminiRes.status}`);
 
+        // Rate limited — wait and retry once
+        if (geminiRes.status === 429) {
+          console.log(`[SCAN] Gemini ${model} rate limited, waiting 5s and retrying...`);
+          await new Promise(r => setTimeout(r, 5000));
+          const retryRes = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [
+                { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
+                { text: PROMPT }
+              ]}],
+              generationConfig: { maxOutputTokens: 800, temperature: 0.1 }
+            })
+          });
+          const retryData = await retryRes.json();
+          console.log(`[SCAN] Gemini ${model} retry status: ${retryRes.status}`);
+          if (!retryData.error && retryData.candidates) {
+            Object.assign(data, retryData);
+          } else {
+            lastErr = `${model}: rate limited (retry also failed)`;
+            console.log(`[SCAN] Gemini ${model} retry also failed`);
+            continue;
+          }
+        }
+
         if (data.error) {
           lastErr = `${model}: ${data.error.message || JSON.stringify(data.error)}`;
           console.log(`[SCAN] Gemini ${model} error: ${lastErr}`);
@@ -338,7 +367,85 @@ app.post('/api/scan', auth, async (req, res) => {
       }
     }
 
-    console.log(`[SCAN] All Gemini models failed. Last error: ${lastErr}`);
+    // ── Fallback: Try Groq API (free, 30 RPM) ──
+    if (GROQ_KEY) {
+      const GROQ_MODELS = [
+        'meta-llama/llama-4-scout-17b-16e-instruct',
+        'meta-llama/llama-4-maverick-17b-128e-instruct',
+      ];
+
+      for (const model of GROQ_MODELS) {
+        try {
+          console.log(`[SCAN] Trying Groq model: ${model}`);
+
+          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${GROQ_KEY}`
+            },
+            body: JSON.stringify({
+              model: model,
+              max_tokens: 800,
+              temperature: 0.1,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+                  { type: 'text', text: PROMPT }
+                ]
+              }]
+            })
+          });
+
+          const data = await groqRes.json();
+          console.log(`[SCAN] Groq ${model} response status: ${groqRes.status}`);
+
+          if (data.error) {
+            lastErr = `groq:${model}: ${data.error.message || JSON.stringify(data.error)}`;
+            console.log(`[SCAN] Groq ${model} error: ${lastErr}`);
+            continue;
+          }
+
+          let text = data.choices?.[0]?.message?.content || '';
+          console.log(`[SCAN] Groq ${model} raw response:`, text.substring(0, 200));
+
+          text = text.replace(/```json|```/g, '').trim();
+          const match = text.match(/\{[\s\S]*\}/);
+          if (!match) {
+            lastErr = `groq:${model}: no JSON in response`;
+            console.log(`[SCAN] Groq ${model}: no JSON found`);
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(match[0]);
+            console.log(`[SCAN] Groq ${model} parsed entries:`, parsed.entries?.length || 0);
+
+            incrementScanCount(user.id, (err) => {
+              if (err) console.error('[SCAN] Failed to increment scan count:', err);
+            });
+
+            res.json({
+              success: true,
+              model: `groq:${model}`,
+              entries: parsed.entries || [],
+              scansRemaining: limit.remaining - 1
+            });
+            return;
+          } catch (parseErr) {
+            lastErr = `groq:${model}: JSON parse error: ${parseErr.message}`;
+            console.log(`[SCAN] Groq ${model} parse error:`, parseErr.message);
+          }
+
+        } catch (ex) {
+          lastErr = `groq:${model}: ${ex.message}`;
+          console.log(`[SCAN] Groq ${model} exception:`, ex.message);
+        }
+      }
+    }
+
+    console.log(`[SCAN] All AI models failed. Last error: ${lastErr}`);
     res.status(502).json({ error: 'All AI models failed', details: lastErr });
   });
 });

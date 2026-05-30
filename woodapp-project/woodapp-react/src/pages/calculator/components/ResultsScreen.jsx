@@ -51,7 +51,7 @@ export default function ResultsScreen({
         <div className="rate-warn">⚠️ {userScans.remaining} scans remaining today</div>
       )}
 
-      {/* Table */}
+      {/* Entries List */}
       {entries.length === 0 ? (
         <div className="no-data">
           <span className="icon">⚠️</span>
@@ -61,45 +61,19 @@ export default function ResultsScreen({
           </div>
         </div>
       ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>A (raw)</th>
-                <th>→ in</th>
-                <th>B (raw)</th>
-                <th>→ in</th>
-                <th>Vol ft³</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e, i) => (
-                <tr key={i}>
-                  <td className="index-cell">{i + 1}</td>
-                  <td className="raw-val">{e.a_raw}</td>
-                  <td className="in-val">{e.a_in}"</td>
-                  <td className="raw-val">{e.b_raw}</td>
-                  <td className="in-val">{e.b_in}"</td>
-                  <td className="vol-cell">{(+e.volume).toFixed(3)}</td>
-                  <td>
-                    <button className="rm-btn" onClick={() => removeEntry(i)} aria-label="Remove entry">✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="entries-panel">
+          <div className="entries-label">ENTRIES</div>
+          {entries.map((e, i) => (
+            <div className="entry-row" key={i}>
+              <span className="entry-tag">MANUAL</span>
+              <span className="entry-num">#{i + 1}</span>
+              <span className="entry-dims">{e.a_raw} × {e.b_raw}</span>
+              <span className="entry-vol">{(+e.volume).toFixed(3)} ft³</span>
+              <button className="entry-rm" onClick={() => removeEntry(i)} aria-label="Remove">✕</button>
+            </div>
+          ))}
         </div>
       )}
-
-      {/* Total */}
-      <div className="total-bar">
-        <span className="total-label">Total Volume</span>
-        <span className="total-value">
-          {total.toFixed(3)}<small>ft³</small>
-        </span>
-      </div>
 
       {/* Manual entry */}
       <div className="manual-box">
@@ -116,16 +90,16 @@ export default function ResultsScreen({
           <button onClick={handleAddManual}>Add</button>
         </div>
         <div className="manual-hint">
-          <strong>Format guide:</strong> 1.6 = 1ft 6in = 1.5ft &nbsp;|&nbsp; 2.3 = 2ft 3in = 2.25ft
+          <strong>Format:</strong> Radius in inches, Height in ft.in (e.g. 12 = 1ft 2in)
         </div>
       </div>
 
       {/* Actions */}
-      <button className="action-btn" onClick={handleSave} disabled={saveDisabled}>{saveLabel}</button>
-      <button className="action-btn" onClick={retake}>📷 Scan Another</button>
-      <button className="action-btn danger" style={{ marginTop: 6, marginBottom: 20 }} onClick={resetAll}>
-        ✕ Start Over
-      </button>
+      <div style={{ padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button className="action-btn" onClick={handleSave} disabled={saveDisabled}>{saveLabel}</button>
+        <button className="action-btn scan" onClick={retake}>📷 Scan Another</button>
+        <button className="action-btn danger" onClick={resetAll}>✕ Start Over</button>
+      </div>
     </div>
   );
 }

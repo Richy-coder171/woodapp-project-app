@@ -230,9 +230,11 @@ export default function CalculatorApp() {
   return (
     <div id="app">
       <header>
-        <div className="logo">🪵</div>
-        <h1>Wood Volume Calculator</h1>
-        <div className="formula-badge">V = π × r² × h &nbsp;|&nbsp; Radius: ft.in &nbsp;|&nbsp; Height: ft</div>
+        <h1><i aria-hidden="true">🪵</i>Wood Volume Calculator</h1>
+        <div className="formula-badge">
+          <i aria-hidden="true">📐</i>
+          <span>V = π × r² × h | Radius: ft.in | Height: ft</span>
+        </div>
       </header>
 
       {screen === 'skeleton'&& <SkeletonScreen />}

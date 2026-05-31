@@ -12,11 +12,13 @@ export default function OfflineScreen({ validateSession, authToken, logout }) {
         onClick={() => validateSession(authToken)}
         style={{ marginBottom: 12 }}
       >
-        🔄 Try Again
+        <i aria-hidden="true">🔄</i>
+        Try Again
       </button>
 
       <div style={{ marginTop: 20 }}>
         <button className="btn-ghost" onClick={logout}>
+          <i aria-hidden="true">↩</i>
           Sign in with a different account
         </button>
       </div>

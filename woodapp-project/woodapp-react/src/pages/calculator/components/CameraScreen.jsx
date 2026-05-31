@@ -34,13 +34,16 @@ export default function CameraScreen({ streamRef, facing, setFacing, handleCaptu
       <video ref={videoRef} playsInline autoPlay muted />
 
       <div className="guide-frame">
-        <span className="guide-label">Align measurements inside frame</span>
+        <span className="guide-label">
+          <i aria-hidden="true">▣</i>
+          Align measurements inside frame
+        </span>
       </div>
 
       <div className="cam-bar">
         <button className="cam-btn" onClick={resetAll} aria-label="Close camera">✕</button>
         <button className="shutter-btn" onClick={capture} aria-label="Take photo">
-          <div className="inner" />
+          <div className="inner"><i aria-hidden="true">📸</i></div>
         </button>
         <button className="cam-btn" onClick={flipCam} aria-label="Switch camera">🔄</button>
       </div>

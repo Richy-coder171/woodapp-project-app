@@ -1,0 +1,6 @@
+interface:
+  display_name: "Woodapp Project App"
+  short_description: "Repo-specific patterns and workflows for woodapp-project-app"
+  default_prompt: "Use the woodapp-project-app repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true

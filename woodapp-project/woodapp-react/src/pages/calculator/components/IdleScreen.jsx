@@ -1,8 +1,6 @@
 export default function IdleScreen({ userInfo, userScans, startCamera, setScreen, logout }) {
   return (
     <div className="screen idle-screen">
-      <div className="idle-icon">📷</div>
-
       <div className="idle-hint">
         <div style={{ marginTop: 12 }}>
           <span style={{
@@ -24,26 +22,32 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
       </div>
 
       <button className="btn-cta" onClick={() => startCamera()}>
-        <span>📷</span> Open Camera
+        <i aria-hidden="true">📷</i>
+        Open Camera
       </button>
 
       <div className="idle-actions">
         <button className="btn-ghost" onClick={() => setScreen('history')}>
-          📋 View History
+          <i aria-hidden="true">📋</i>
+          View History
         </button>
         <div className="user-badge">
           <span className="dot" />
           <span>{userInfo}</span>
         </div>
         <div className="scan-badge">
-          📊 {userScans.remaining} scans left today
+          <i aria-hidden="true">📊</i>
+          {userScans.remaining} scans left today
         </div>
         <button className="btn-ghost" onClick={() => setScreen('admin')}>
-          ⚙️ Admin Dashboard
+          <i aria-hidden="true">⚙️</i>
+          Admin Dashboard
         </button>
-        <button className="btn-ghost" onClick={logout}>Sign Out</button>
+        <button className="btn-ghost" onClick={logout}>
+          <i aria-hidden="true">↩</i>
+          Sign Out
+        </button>
       </div>
     </div>
   );
 }
-

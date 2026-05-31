@@ -68,6 +68,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ===== ICON BASELINE ===== */
+i {
+  font-style: normal;
+  line-height: 1;
+  flex-shrink: 0;
+}
+i[class^="ti-"], i[class*=" ti-"] {
+  vertical-align: -2px;
+}
+
 /* ===== APP SHELL ===== */
 #app {
   width: 100%;
@@ -104,19 +114,31 @@ header h1 {
   font-weight: 500;
   letter-spacing: -0.02em;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
+header h1 i { font-size: 20px; }
 header .formula-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 11px;
   color: var(--accent-dark);
   background: rgba(29,158,117,0.12);
   border: 0.5px solid var(--accent-border);
   border-radius: 20px;
   padding: 5px 14px;
-  display: inline-block;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
   font-weight: 500;
+  max-width: 100%;
+  line-height: 1.4;
 }
+header .formula-badge i { font-size: 14px; }
 
 /* ===== SCREEN WRAPPER ===== */
 .screen {
@@ -138,7 +160,17 @@ header .formula-badge {
   padding: 24px;
 }
 .auth-hero { text-align: center; margin-bottom: 4px; }
-.auth-hero h2 { color: var(--accent-dark); font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.auth-hero h2 {
+  color: var(--accent-dark);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.auth-hero h2 i { font-size: 22px; }
 .auth-card {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border-subtle);
@@ -150,12 +182,21 @@ header .formula-badge {
   gap: 12px;
 }
 .input-group { position: relative; }
+.input-group i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 17px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
 .input-group input {
   width: 100%;
   background: var(--bg-input);
   border: 0.5px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 13px 14px;
+  padding: 13px 14px 13px 40px;
   color: var(--text-primary);
   font-size: 15px;
   outline: none;
@@ -179,8 +220,13 @@ header .formula-badge {
   cursor: pointer;
   transition: background var(--t-fast), transform var(--t-fast);
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   letter-spacing: 0.01em;
 }
+.btn-primary i { font-size: 17px; }
 .btn-primary:hover { background: var(--accent-dark); }
 .btn-primary:active { transform: scale(0.98); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -201,7 +247,11 @@ header .formula-badge {
   background: var(--danger-bg);
   border-radius: var(--radius-sm);
   border: 0.5px solid var(--danger-border);
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
 }
+.auth-err i { font-size: 16px; margin-top: 1px; }
 
 /* ===== SUBSCRIPTION ===== */
 .sub-screen {
@@ -211,7 +261,17 @@ header .formula-badge {
   padding: 24px;
 }
 .sub-hero { text-align: center; }
-.sub-hero h2 { color: var(--accent-dark); font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.sub-hero h2 {
+  color: var(--accent-dark);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.sub-hero h2 i { font-size: 22px; }
 .sub-card {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border-subtle);
@@ -228,8 +288,17 @@ header .formula-badge {
   font-size: 13px;
 }
 .sub-row:last-child { border-bottom: none; }
-.sub-label { color: var(--text-secondary); }
+.sub-label {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.sub-label i { font-size: 16px; }
 .sub-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--accent-bg);
   color: var(--accent-dark);
   border: 0.5px solid var(--accent-border);
@@ -238,6 +307,7 @@ header .formula-badge {
   font-size: 12px;
   font-weight: 500;
 }
+.sub-value i { font-size: 13px; }
 .sub-value.status-inactive {
   background: var(--danger-bg);
   color: var(--danger-text);
@@ -261,7 +331,12 @@ header .formula-badge {
   cursor: pointer;
   transition: all var(--t-fast);
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
+.btn-secondary i { font-size: 16px; }
 .btn-secondary:hover { border-color: var(--accent); color: var(--accent-dark); background: var(--accent-bg); }
 .btn-secondary:active { transform: scale(0.98); }
 
@@ -300,6 +375,7 @@ header .formula-badge {
   font-family: inherit;
   letter-spacing: 0.01em;
 }
+.btn-cta i { font-size: 20px; }
 .btn-cta:hover { background: var(--accent-dark); }
 .btn-cta:active { transform: scale(0.98); }
 .idle-actions { display: flex; flex-direction: column; gap: 6px; align-items: center; }
@@ -317,6 +393,7 @@ header .formula-badge {
   align-items: center;
   gap: 5px;
 }
+.btn-ghost i { font-size: 15px; }
 .btn-ghost:hover { color: var(--accent); }
 .user-badge {
   display: inline-flex;
@@ -330,12 +407,16 @@ header .formula-badge {
   color: var(--accent-dark);
   font-weight: 500;
 }
+.user-badge i { font-size: 15px; }
 .user-badge .dot {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: var(--accent);
 }
 .scan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--amber-text);
   background: var(--amber-bg);
@@ -345,6 +426,7 @@ header .formula-badge {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+.scan-badge i { font-size: 13px; }
 
 /* ===== CAMERA ===== */
 .camera-screen {
@@ -402,7 +484,11 @@ header .formula-badge {
   border: 0.5px solid var(--accent-border);
   font-weight: 500;
   letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
+.guide-label i { font-size: 12px; }
 .cam-bar {
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -419,7 +505,7 @@ header .formula-badge {
   border-radius: 50%;
   width: 46px; height: 46px;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 20px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -448,6 +534,11 @@ header .formula-badge {
   border-radius: 50%;
   background: var(--accent);
   transition: transform var(--t-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
 }
 .shutter-btn:active .inner { transform: scale(0.84); }
 
@@ -485,6 +576,7 @@ header .formula-badge {
   justify-content: center;
   gap: 6px;
 }
+.btn-outline i { font-size: 17px; }
 .btn-outline:hover { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-dark); }
 .btn-outline:active { transform: scale(0.97); }
 .err-box {
@@ -495,7 +587,11 @@ header .formula-badge {
   line-height: 1.6;
   border-left: 2px solid var(--danger);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
+.err-box i { font-size: 16px; margin-top: 1px; }
 
 /* ===== LOADING ===== */
 .loading-screen {
@@ -526,7 +622,12 @@ header .formula-badge {
   font-size: 17px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
+.loading-screen h2 i { font-size: 18px; }
 .loading-screen p {
   color: var(--text-secondary);
   font-size: 13px;
@@ -566,18 +667,98 @@ header .formula-badge {
   border-radius: 20px;
   font-weight: 500;
   letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
+.thumb-label i { font-size: 12px; }
 .rate-warn {
   background: var(--amber-bg);
   color: var(--amber-text);
   padding: 9px 16px;
   font-size: 12px;
-  text-align: center;
   border-radius: var(--radius-sm);
   margin: 10px 14px 0;
   border: 0.5px solid var(--amber-border);
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.rate-warn i { font-size: 16px; }
+
+.table-container {
+  margin: 10px 14px 0;
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+.table-container table { width: 100%; min-width: 440px; border-collapse: collapse; font-size: 13px; }
+.table-container thead tr { background: var(--accent-bg); }
+.table-container th {
+  padding: 9px 12px;
+  color: var(--accent-dark);
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 0.5px solid var(--accent-border);
+}
+.table-container th i { font-size: 13px; margin-right: 4px; vertical-align: -1px; }
+.table-container td { padding: 10px 12px; border-top: 0.5px solid var(--border-subtle); vertical-align: middle; }
+.table-container tr:hover td { background: var(--accent-bg); }
+.vol-cell   { color: var(--accent-dark); font-weight: 500; font-variant-numeric: tabular-nums; }
+.index-cell { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.raw-val    { font-weight: 500; color: var(--text-primary); }
+.in-val     { color: var(--amber-text); font-variant-numeric: tabular-nums; font-size: 12px; }
+.rm-btn {
+  background: var(--danger-bg);
+  border: 0.5px solid var(--danger-border);
+  color: var(--danger-text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all var(--t-fast);
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.rm-btn i { font-size: 13px; }
+.rm-btn:hover  { background: #F7C1C1; }
+.rm-btn:active { transform: scale(0.95); }
+.total-bar {
+  background: var(--accent-bg);
+  border-top: 0.5px solid var(--accent-border);
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  position: sticky;
+  bottom: 0;
+}
+.total-bar .total-label {
+  color: var(--accent-dark);
+  font-weight: 500;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.total-bar .total-label i { font-size: 16px; }
+.total-bar .total-value {
+  color: var(--accent-dark);
+  font-weight: 500;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.total-bar .total-value small { font-size: 14px; font-weight: 500; margin-left: 3px; }
 /* ── Entries Panel (mobile-friendly) ── */
 .entries-panel {
   margin: 10px 14px 0;
@@ -658,7 +839,11 @@ header .formula-badge {
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.manual-box h3 i { font-size: 14px; }
 .manual-row { display: flex; gap: 8px; align-items: stretch; }
 .manual-row input {
   flex: 1;
@@ -690,7 +875,11 @@ header .formula-badge {
   white-space: nowrap;
   transition: background var(--t-fast);
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.manual-row button i { font-size: 15px; }
 .manual-row button:hover { background: var(--purple-text); }
 .manual-row button:active { transform: scale(0.95); }
 .manual-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 8px; line-height: 1.5; }
@@ -710,16 +899,20 @@ header .formula-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 9px;
   text-align: left;
 }
+.action-btn i { font-size: 17px; }
 .action-btn.export { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue-border); }
 .action-btn.export:hover { background: #B5D4F4; }
 .action-btn.scan { background: var(--accent-bg); color: var(--accent-dark); border-color: var(--accent-border); }
 .action-btn.scan:hover { background: #9FE1CB; }
+.action-btn.hist { background: var(--purple-bg); color: var(--purple-text); border-color: var(--purple-border); }
+.action-btn.hist:hover { background: #CECBF6; }
 .action-btn.danger { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
 .action-btn.danger:hover { background: #F7C1C1; }
 .action-btn:active { transform: scale(0.98); }
+.action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .no-data {
   padding: 32px 20px;
   text-align: center;
@@ -727,6 +920,7 @@ header .formula-badge {
   line-height: 1.8;
   font-size: 13px;
 }
+.no-data i { font-size: 32px; display: block; margin-bottom: 8px; color: var(--text-muted); }
 
 /* ===== HISTORY ===== */
 .history-screen { overflow-y: auto; padding: 16px; background: var(--bg-primary); }
@@ -736,7 +930,12 @@ header .formula-badge {
   font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
+.history-header h2 i { font-size: 20px; color: var(--accent-dark); }
 .history-item {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border-subtle);
@@ -747,9 +946,11 @@ header .formula-badge {
   transition: border-left-color var(--t-fast), background var(--t-fast);
 }
 .history-item:hover { background: var(--accent-bg); border-left-color: var(--accent-dark); }
-.history-item .date     { color: var(--text-tertiary); font-size: 11px; margin-bottom: 6px; font-weight: 500; letter-spacing: 0.03em; }
+.history-item .date     { color: var(--text-tertiary); font-size: 11px; margin-bottom: 6px; font-weight: 500; letter-spacing: 0.03em; display: flex; align-items: center; gap: 5px; }
+.history-item .date i { font-size: 12px; }
 .history-item .vol      { color: var(--accent-dark); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.history-item .entries  { color: var(--text-secondary); font-size: 12px; margin-top: 5px; line-height: 1.5; }
+.history-item .entries  { color: var(--text-secondary); font-size: 12px; margin-top: 5px; line-height: 1.5; display: flex; align-items: center; gap: 5px; }
+.history-item .entries i { font-size: 13px; color: var(--text-tertiary); }
 .history-item .meta     { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border-subtle); }
 .history-item .meta .count {
   font-size: 11px;
@@ -759,7 +960,19 @@ header .formula-badge {
   border-radius: 20px;
   padding: 3px 10px;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
+.history-item .meta .count i { font-size: 12px; }
+.history-item .meta .expand {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.history-item .meta .expand i { font-size: 13px; }
 
 /* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar { width: 3px; }

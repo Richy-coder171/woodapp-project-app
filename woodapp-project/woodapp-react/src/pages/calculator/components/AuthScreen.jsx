@@ -81,8 +81,7 @@ export default function AuthScreen({ setAuthToken, validateSession, setScreen })
   return (
     <div className="screen auth-screen">
       <div className="auth-hero">
-        <div className="icon">🔐</div>
-        <h2>Wood Volume Calculator</h2>
+        <h2><i aria-hidden="true">🔐</i>Wood Volume Calculator</h2>
       </div>
 
       <div className="auth-card">
@@ -103,6 +102,7 @@ export default function AuthScreen({ setAuthToken, validateSession, setScreen })
         </div>
 
         <div className="input-group">
+          <i aria-hidden="true">✉️</i>
           <input
             type="email"
             placeholder="Email address"
@@ -113,6 +113,7 @@ export default function AuthScreen({ setAuthToken, validateSession, setScreen })
           />
         </div>
         <div className="input-group">
+          <i aria-hidden="true">🔒</i>
           <input
             type="password"
             placeholder="Password (min 6 characters)"
@@ -124,6 +125,7 @@ export default function AuthScreen({ setAuthToken, validateSession, setScreen })
         </div>
 
         <button className="btn-primary" onClick={handleAuth} disabled={loading}>
+          <i aria-hidden="true">{loading ? '⏳' : (isLogin ? '→' : '+')}</i>
           {loading
             ? (isLogin ? 'Signing in…' : 'Creating account…')
             : (isLogin ? 'Sign In'     : 'Create Account')}
@@ -133,9 +135,13 @@ export default function AuthScreen({ setAuthToken, validateSession, setScreen })
           {isLogin ? 'Need an account? Create one' : 'Already have an account? Sign in'}
         </p>
 
-        {error && <p className="auth-err" style={{ whiteSpace: 'pre-line' }}>{error}</p>}
+        {error && (
+          <p className="auth-err" style={{ whiteSpace: 'pre-line' }}>
+            <i aria-hidden="true">⚠️</i>
+            <span>{error}</span>
+          </p>
+        )}
       </div>
     </div>
   );
 }
-

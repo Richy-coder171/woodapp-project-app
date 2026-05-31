@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react';
 export default function CameraScreen({ streamRef, facing, setFacing, handleCapture, resetAll, startCamera }) {
   const videoRef = useRef(null);
 
-  // Attach stream to video element whenever screen mounts or stream changes
   useEffect(() => {
     if (videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -30,22 +29,21 @@ export default function CameraScreen({ streamRef, facing, setFacing, handleCaptu
 
   return (
     <div className="screen camera-screen">
-      {/* Video fills the entire camera-screen div */}
       <video ref={videoRef} playsInline autoPlay muted />
 
       <div className="guide-frame">
         <span className="guide-label">
-          <i aria-hidden="true">▣</i>
-          Align measurements inside frame
+          <i aria-hidden="true">+</i>
+          Measure area
         </span>
       </div>
 
       <div className="cam-bar">
-        <button className="cam-btn" onClick={resetAll} aria-label="Close camera">✕</button>
+        <button className="cam-btn" onClick={resetAll} aria-label="Close camera">x</button>
         <button className="shutter-btn" onClick={capture} aria-label="Take photo">
-          <div className="inner"><i aria-hidden="true">📸</i></div>
+          <div className="inner"><i aria-hidden="true" /></div>
         </button>
-        <button className="cam-btn" onClick={flipCam} aria-label="Switch camera">🔄</button>
+        <button className="cam-btn" onClick={flipCam} aria-label="Switch camera">{'<>'}</button>
       </div>
     </div>
   );

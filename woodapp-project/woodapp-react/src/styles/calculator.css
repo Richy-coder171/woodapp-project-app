@@ -113,7 +113,7 @@ i {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   background:
     linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px),
@@ -1036,8 +1036,10 @@ header h1 {
 }
 
 /* ===== RESULTS ===== */
+/* AFTER */
 .results-screen {
   overflow-y: auto;
+  overflow-x: auto;
   background: var(--paper);
   padding-bottom: 16px;
 }
@@ -1097,12 +1099,14 @@ header h1 {
   border-radius: var(--radius-card);
   background: rgba(255, 250, 240, 0.42);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;  /* ← ADD */
+  max-width: calc(100vw - 28px);      /* ← ADD */
   box-shadow: 6px 6px 0 rgba(58, 51, 40, 0.08);
 }
 
 .table-container table {
   width: 100%;
-  min-width: 440px;
+ min-width: 320px;
   border-collapse: collapse;
   font-size: 13px;
 }

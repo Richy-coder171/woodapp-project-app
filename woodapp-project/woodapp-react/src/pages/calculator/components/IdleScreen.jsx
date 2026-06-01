@@ -3,7 +3,7 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
     <div className="screen idle-screen">
       <div className="idle-panel">
         <div className="eyebrow"></div>
-        <h2>Calculator</h2>
+        <h2>calculator</h2>
         <div className="instrument-strip" aria-hidden="true">
           {Array.from({ length: 18 }).map((_, i) => (
             <span key={i} className={i % 3 === 0 ? 'major' : ''} />
@@ -18,7 +18,7 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
       </button>
 
       <div className="idle-actions">
-        <button className="btn-ghost" onClick={() => setScreen('history')}>
+        <button className="btn btn-secondary" onClick={() => setScreen('history')}>
           <i aria-hidden="true">#</i>
           View History
         </button>

@@ -2,8 +2,8 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
   return (
     <div className="screen idle-screen">
       <div className="idle-panel">
-        <div className="eyebrow">Field mode</div>
-        <h2>Frame the marks. Keep the tally moving.</h2>
+        <div className="eyebrow"></div>
+        <h2>Calculator</h2>
         <div className="instrument-strip" aria-hidden="true">
           {Array.from({ length: 18 }).map((_, i) => (
             <span key={i} className={i % 3 === 0 ? 'major' : ''} />

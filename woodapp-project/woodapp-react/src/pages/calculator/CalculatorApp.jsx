@@ -39,7 +39,7 @@ export default function CalculatorApp() {
     }
   }, []);
 
-  /* ── Session ── */
+  /* Session */
   async function validateSession(token = authToken) {
     if (!token) { setScreen('auth'); return; }
     try {
@@ -53,7 +53,7 @@ export default function CalculatorApp() {
       });
       clearTimeout(timeout);
 
-      // Token is invalid or expired → must login again
+      // Token is invalid or expired, so require login again.
       if (res.status === 401) {
         localStorage.removeItem('wood_auth_token');
         setAuthToken(null);
@@ -75,10 +75,10 @@ export default function CalculatorApp() {
 
       const scans = data.scans || { used: 0, limit: 200, remaining: 200 };
       setUserScans(scans);
-      setUserInfo(`${data.email} · ${data.subscription.daysLeft} days remaining`);
+      setUserInfo(`${data.email} | ${data.subscription.daysLeft} days remaining`);
       setScreen('idle');
     } catch (err) {
-      // Network error / timeout — DON'T clear the token!
+      // Network error / timeout: keep the token.
       // Keep the user logged in and show a retry option
       console.log('Session validation failed (network):', err.message);
       setScreen('offline');
@@ -94,7 +94,7 @@ export default function CalculatorApp() {
     setScreen('auth');
   }
 
-  /* ── Camera ── */
+  /* Camera */
   async function startCamera(facingMode = facing) {
     try {
       stopStream();
@@ -136,7 +136,7 @@ export default function CalculatorApp() {
     setScreen('idle');
   }
 
-  /* ── Scan ── */
+  /* Scan */
   async function scanImage() {
     if (!capturedB64) return;
 
@@ -182,7 +182,7 @@ export default function CalculatorApp() {
     }
   }
 
-  /* ── Entries ── */
+  /* Entries */
   function removeEntry(i) {
     setEntries(prev => prev.filter((_, idx) => idx !== i));
   }
@@ -194,7 +194,7 @@ export default function CalculatorApp() {
     setEntries(prev => [...prev, { a_raw: rRaw, b_raw: hRaw, a_in: aIn, b_in: bIn, volume: +vol.toFixed(3) }]);
   }
 
-  /* ── Save ── */
+  /* Save */
   async function saveScan() {
     if (!entries.length) return;
     const total = entries.reduce((s, e) => s + (+e.volume), 0);
@@ -207,7 +207,7 @@ export default function CalculatorApp() {
     if (!data.success) throw new Error('Save failed');
   }
 
-  /* ── Shared props ── */
+  /* Shared props */
   const props = {
     authToken, setAuthToken,
     entries, setEntries,
@@ -230,10 +230,14 @@ export default function CalculatorApp() {
   return (
     <div id="app">
       <header>
-        <h1><i aria-hidden="true">🪵</i>Wood Volume Calculator</h1>
+        <div className="brand-lockup" aria-label="WoodApp">
+          <span className="brand-mark" aria-hidden="true">W</span>
+          <span className="brand-kicker">WoodApp field ledger</span>
+        </div>
+        <h1>Wood Volume Calculator</h1>
         <div className="formula-badge">
-          <i aria-hidden="true">📐</i>
-          <span>V = π × r² × h | Radius: ft.in | Height: ft</span>
+          <i aria-hidden="true">#</i>
+          <span>V = r x h2 / 2304 | radius: in | height: ft.in</span>
         </div>
       </header>
 
@@ -251,14 +255,9 @@ export default function CalculatorApp() {
         <div>
           <button
             onClick={() => setScreen('idle')}
-            style={{
-              position: 'fixed', top: 10, left: 10, zIndex: 1100,
-              background: '#7c3aed', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '8px 16px', fontSize: 14,
-              fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-            }}
+            className="admin-back-btn"
           >
-            ← Back to App
+            Back to App
           </button>
           <AdminDashboard />
         </div>

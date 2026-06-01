@@ -1,0 +1,453 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/pages/calculator/components/ResultsScreen.jsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=a2127b28"; const Fragment = __vite__cjsImport0_react_jsxDevRuntime["Fragment"]; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+var _s = $RefreshSig$();
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=a2127b28"; const useState = __vite__cjsImport3_react["useState"];
+export default function ResultsScreen({
+  entries,
+  capturedPreview,
+  userScans,
+  removeEntry,
+  addManual,
+  saveScan,
+  retake,
+  resetAll
+}) {
+  _s();
+  const [mR, setMR] = useState("");
+  const [mH, setMH] = useState("");
+  const [saveLabel, setSaveLabel] = useState("Save to History");
+  const [saveDisabled, setSaveDisabled] = useState(false);
+  const total = entries.reduce((s, e) => s + +e.volume, 0);
+  const fmtIn = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? `${n.toFixed(1)} in` : "n/a";
+  };
+  function handleAddManual() {
+    const rRaw = mR.trim();
+    const hRaw = mH.trim();
+    if (!rRaw || !hRaw) return;
+    if (isNaN(parseFloat(rRaw)) || isNaN(parseFloat(hRaw))) return;
+    addManual(rRaw, hRaw);
+    setMR("");
+    setMH("");
+  }
+  async function handleSave() {
+    setSaveDisabled(true);
+    setSaveLabel("Saving...");
+    try {
+      await saveScan();
+      setSaveLabel("Saved!");
+      setTimeout(() => {
+        setSaveLabel("Save to History");
+        setSaveDisabled(false);
+      }, 1500);
+    } catch {
+      setSaveLabel("Save to History");
+      setSaveDisabled(false);
+      alert("Save failed - check connection");
+    }
+  }
+  return /* @__PURE__ */ jsxDEV("div", { className: "screen results-screen", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "thumb-wrap", children: [
+      /* @__PURE__ */ jsxDEV("img", { src: capturedPreview, alt: "" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 65,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "thumb-label", children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "+" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 67,
+          columnNumber: 11
+        }, this),
+        entries.length,
+        " entr",
+        entries.length === 1 ? "y" : "ies",
+        " found"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 66,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 64,
+      columnNumber: 7
+    }, this),
+    userScans.remaining <= 20 && /* @__PURE__ */ jsxDEV("div", { className: "rate-warn", children: [
+      /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "!" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 74,
+        columnNumber: 11
+      }, this),
+      userScans.remaining,
+      " scans remaining today"
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 73,
+      columnNumber: 7
+    }, this),
+    entries.length === 0 ? /* @__PURE__ */ jsxDEV("div", { className: "no-data", children: [
+      /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "!" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 81,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { children: "No measurements found" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 82,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "no-data-note", children: "Try retaking in better light, or add entries manually below" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 83,
+        columnNumber: 11
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 80,
+      columnNumber: 7
+    }, this) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "table-container", children: /* @__PURE__ */ jsxDEV("table", { children: [
+        /* @__PURE__ */ jsxDEV("thead", { children: /* @__PURE__ */ jsxDEV("tr", { children: [
+          /* @__PURE__ */ jsxDEV("th", { children: [
+            /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "#" }, void 0, false, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 93,
+              columnNumber: 23
+            }, this),
+            "Entry"
+          ] }, void 0, true, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 93,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("th", { children: [
+            /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "r" }, void 0, false, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 94,
+              columnNumber: 23
+            }, this),
+            "Radius"
+          ] }, void 0, true, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 94,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("th", { children: [
+            /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "h" }, void 0, false, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 95,
+              columnNumber: 23
+            }, this),
+            "Height"
+          ] }, void 0, true, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 95,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("th", { children: [
+            /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "=" }, void 0, false, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 96,
+              columnNumber: 23
+            }, this),
+            "Volume"
+          ] }, void 0, true, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 96,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("th", { "aria-label": "Actions" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 97,
+            columnNumber: 19
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 92,
+          columnNumber: 17
+        }, this) }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 91,
+          columnNumber: 15
+        }, this),
+        /* @__PURE__ */ jsxDEV("tbody", { children: entries.map(
+          (e, i) => /* @__PURE__ */ jsxDEV("tr", { children: [
+            /* @__PURE__ */ jsxDEV("td", { className: "index-cell", children: [
+              "#",
+              i + 1
+            ] }, void 0, true, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 103,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("td", { children: [
+              /* @__PURE__ */ jsxDEV("div", { className: "raw-val", children: e.a_raw }, void 0, false, {
+                fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+                lineNumber: 105,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("div", { className: "in-val", children: fmtIn(e.a_in) }, void 0, false, {
+                fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+                lineNumber: 106,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 104,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("td", { children: [
+              /* @__PURE__ */ jsxDEV("div", { className: "raw-val", children: e.b_raw }, void 0, false, {
+                fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+                lineNumber: 109,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("div", { className: "in-val", children: fmtIn(e.b_in) }, void 0, false, {
+                fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+                lineNumber: 110,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 108,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("td", { className: "vol-cell", children: [
+              (+e.volume).toFixed(3),
+              " ft3"
+            ] }, void 0, true, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 112,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("td", { children: /* @__PURE__ */ jsxDEV("button", { className: "rm-btn", onClick: () => removeEntry(i), "aria-label": `Remove entry ${i + 1}`, children: [
+              /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "x" }, void 0, false, {
+                fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+                lineNumber: 115,
+                columnNumber: 25
+              }, this),
+              "Remove"
+            ] }, void 0, true, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 114,
+              columnNumber: 23
+            }, this) }, void 0, false, {
+              fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+              lineNumber: 113,
+              columnNumber: 21
+            }, this)
+          ] }, i, true, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 102,
+            columnNumber: 15
+          }, this)
+        ) }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 100,
+          columnNumber: 15
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 90,
+        columnNumber: 13
+      }, this) }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 89,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "total-bar", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "total-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "=" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 126,
+            columnNumber: 43
+          }, this),
+          "Total Volume"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 126,
+          columnNumber: 13
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "total-value", children: [
+          total.toFixed(3),
+          /* @__PURE__ */ jsxDEV("small", { children: "ft3" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 127,
+            columnNumber: 61
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 127,
+          columnNumber: 13
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 125,
+        columnNumber: 11
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 88,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "manual-box", children: [
+      /* @__PURE__ */ jsxDEV("h3", { children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "+" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 133,
+          columnNumber: 13
+        }, this),
+        "Add entry manually"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 133,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "manual-row", children: [
+        /* @__PURE__ */ jsxDEV(
+          "input",
+          {
+            type: "number",
+            step: "0.1",
+            placeholder: "Radius",
+            value: mR,
+            onChange: (e) => setMR(e.target.value)
+          },
+          void 0,
+          false,
+          {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 135,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          "input",
+          {
+            type: "number",
+            step: "1",
+            placeholder: "Height",
+            value: mH,
+            onChange: (e) => setMH(e.target.value)
+          },
+          void 0,
+          false,
+          {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 139,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV("button", { onClick: handleAddManual, children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "+" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+            lineNumber: 144,
+            columnNumber: 13
+          }, this),
+          "Add"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 143,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 134,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "manual-hint", children: "Radius in inches. Height in ft.in notation, for example 36 is 3 ft 6 in." }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 148,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 132,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "results-actions", children: [
+      /* @__PURE__ */ jsxDEV("button", { className: "action-btn hist", onClick: handleSave, disabled: saveDisabled, children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: saveDisabled ? "..." : saveLabel === "Saved!" ? "+" : "#" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 155,
+          columnNumber: 11
+        }, this),
+        saveLabel
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 154,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("button", { className: "action-btn scan", onClick: retake, children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "[]" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 159,
+          columnNumber: 11
+        }, this),
+        "Scan Another"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 158,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("button", { className: "action-btn danger", onClick: resetAll, children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "x" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+          lineNumber: 163,
+          columnNumber: 11
+        }, this),
+        "Start Over"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+        lineNumber: 162,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+      lineNumber: 153,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx",
+    lineNumber: 63,
+    columnNumber: 5
+  }, this);
+}
+_s(ResultsScreen, "GuOTUTkB6S7HVEeUz2oaPsuEumI=");
+_c = ResultsScreen;
+var _c;
+$RefreshReg$(_c, "ResultsScreen");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/ResultsScreen.jsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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O0FBQUEsK0JBQUMsT0FBRSxlQUFZLFFBQU8saUJBQXRCO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBdUI7QUFBQSxRQUFHO0FBQUEsV0FENUI7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUdBO0FBQUEsU0FaRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBYUE7QUFBQSxPQXZHRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBd0dBO0FBRUo7QUFBQ0MsR0FuSnVCVCxlQUFhO0FBQUEsS0FBYkE7QUFBYSxJQUFBK0M7QUFBQSxhQUFBQSxJQUFBIiwibmFtZXMiOlsidXNlU3RhdGUiLCJSZXN1bHRzU2NyZWVuIiwiZW50cmllcyIsImNhcHR1cmVkUHJldmlldyIsInVzZXJTY2FucyIsInJlbW92ZUVudHJ5IiwiYWRkTWFudWFsIiwic2F2ZVNjYW4iLCJyZXRha2UiLCJyZXNldEFsbCIsIl9zIiwibVIiLCJzZXRNUiIsIm1IIiwic2V0TUgiLCJzYXZlTGFiZWwiLCJzZXRTYXZlTGFiZWwiLCJzYXZlRGlzYWJsZWQiLCJzZXRTYXZlRGlzYWJsZWQiLCJ0b3RhbCIsInJlZHVjZSIsInMiLCJlIiwidm9sdW1lIiwiZm10SW4iLCJ2YWx1ZSIsIm4iLCJOdW1iZXIiLCJpc0Zpbml0ZSIsInRvRml4ZWQiLCJoYW5kbGVBZGRNYW51YWwiLCJyUmF3IiwidHJpbSIsImhSYXciLCJpc05hTiIsInBhcnNlRmxvYXQiLCJoYW5kbGVTYXZlIiwic2V0VGltZW91dCIsImFsZXJ0IiwibGVuZ3RoIiwicmVtYWluaW5nIiwibWFwIiwiaSIsImFfcmF3IiwiYV9pbiIsImJfcmF3IiwiYl9pbiIsInRhcmdldCIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIlJlc3VsdHNTY3JlZW4uanN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHVzZVN0YXRlIH0gZnJvbSAncmVhY3QnO1xuXG5leHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBSZXN1bHRzU2NyZWVuKHtcbiAgZW50cmllcywgY2FwdHVyZWRQcmV2aWV3LCB1c2VyU2NhbnMsXG4gIHJlbW92ZUVudHJ5LCBhZGRNYW51YWwsIHNhdmVTY2FuLFxuICByZXRha2UsIHJlc2V0QWxsLFxufSkge1xuICBjb25zdCBbbVIsIHNldE1SXSA9IHVzZVN0YXRlKCcnKTtcbiAgY29uc3QgW21ILCBzZXRNSF0gPSB1c2VTdGF0ZSgnJyk7XG4gIGNvbnN0IFtzYXZlTGFiZWwsIHNldFNhdmVMYWJlbF0gPSB1c2VTdGF0ZSgnU2F2ZSB0byBIaXN0b3J5Jyk7XG4gIGNvbnN0IFtzYXZlRGlzYWJsZWQsIHNldFNhdmVEaXNhYmxlZF0gPSB1c2VTdGF0ZShmYWxzZSk7XG5cbiAgY29uc3QgdG90YWwgPSBlbnRyaWVzLnJlZHVjZSgocywgZSkgPT4gcyArICgrZS52b2x1bWUpLCAwKTtcbiAgY29uc3QgZm10SW4gPSB2YWx1ZSA9PiB7XG4gICAgY29uc3QgbiA9IE51bWJlcih2YWx1ZSk7XG4gICAgcmV0dXJuIE51bWJlci5pc0Zpbml0ZShuKSA/IGAke24udG9GaXhlZCgxKX0gaW5gIDogJ24vYSc7XG4gIH07XG5cbiAgZnVuY3Rpb24gaGFuZGxlQWRkTWFudWFsKCkge1xuICAgIGNvbnN0IHJSYXcgPSBtUi50cmltKCk7XG4gICAgY29uc3QgaFJhdyA9IG1ILnRyaW0oKTtcbiAgICBpZiAoIXJSYXcgfHwgIWhSYXcpIHJldHVybjtcbiAgICBpZiAoaXNOYU4ocGFyc2VGbG9hdChyUmF3KSkgfHwgaXNOYU4ocGFyc2VGbG9hdChoUmF3KSkpIHJldHVybjtcbiAgICBhZGRNYW51YWwoclJhdywgaFJhdyk7XG4gICAgc2V0TVIoJycpO1xuICAgIHNldE1IKCcnKTtcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZVNhdmUoKSB7XG4gICAgc2V0U2F2ZURpc2FibGVkKHRydWUpO1xuICAgIHNldFNhdmVMYWJlbCgnU2F2aW5nLi4uJyk7XG4gICAgdHJ5IHtcbiAgICAgIGF3YWl0IHNhdmVTY2FuKCk7XG4gICAgICBzZXRTYXZlTGFiZWwoJ1NhdmVkIScpO1xuICAgICAgc2V0VGltZW91dCgoKSA9PiB7IHNldFNhdmVMYWJlbCgnU2F2ZSB0byBIaXN0b3J5Jyk7IHNldFNhdmVEaXNhYmxlZChmYWxzZSk7IH0sIDE1MDApO1xuICAgIH0gY2F0Y2gge1xuICAgICAgc2V0U2F2ZUxhYmVsKCdTYXZlIHRvIEhpc3RvcnknKTtcbiAgICAgIHNldFNhdmVEaXNhYmxlZChmYWxzZSk7XG4gICAgICBhbGVydCgnU2F2ZSBmYWlsZWQgLSBjaGVjayBjb25uZWN0aW9uJyk7XG4gICAgfVxuICB9XG5cbiAgcmV0dXJuIChcbiAgICA8ZGl2IGNsYXNzTmFtZT1cInNjcmVlbiByZXN1bHRzLXNjcmVlblwiPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJ0aHVtYi13cmFwXCI+XG4gICAgICAgIDxpbWcgc3JjPXtjYXB0dXJlZFByZXZpZXd9IGFsdD1cIlwiIC8+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidGh1bWItbGFiZWxcIj5cbiAgICAgICAgICA8aSBhcmlhLWhpZGRlbj1cInRydWVcIj4rPC9pPlxuICAgICAgICAgIHtlbnRyaWVzLmxlbmd0aH0gZW50cntlbnRyaWVzLmxlbmd0aCA9PT0gMSA/ICd5JyA6ICdpZXMnfSBmb3VuZFxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuXG4gICAgICB7dXNlclNjYW5zLnJlbWFpbmluZyA8PSAyMCAmJiAoXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwicmF0ZS13YXJuXCI+XG4gICAgICAgICAgPGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+ITwvaT5cbiAgICAgICAgICB7dXNlclNjYW5zLnJlbWFpbmluZ30gc2NhbnMgcmVtYWluaW5nIHRvZGF5XG4gICAgICAgIDwvZGl2PlxuICAgICAgKX1cblxuICAgICAge2VudHJpZXMubGVuZ3RoID09PSAwID8gKFxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cIm5vLWRhdGFcIj5cbiAgICAgICAgICA8aSBhcmlhLWhpZGRlbj1cInRydWVcIj4hPC9pPlxuICAgICAgICAgIDxkaXY+Tm8gbWVhc3VyZW1lbnRzIGZvdW5kPC9kaXY+XG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJuby1kYXRhLW5vdGVcIj5cbiAgICAgICAgICAgIFRyeSByZXRha2luZyBpbiBiZXR0ZXIgbGlnaHQsIG9yIGFkZCBlbnRyaWVzIG1hbnVhbGx5IGJlbG93XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgIDwvZGl2PlxuICAgICAgKSA6IChcbiAgICAgICAgPD5cbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInRhYmxlLWNvbnRhaW5lclwiPlxuICAgICAgICAgICAgPHRhYmxlPlxuICAgICAgICAgICAgICA8dGhlYWQ+XG4gICAgICAgICAgICAgICAgPHRyPlxuICAgICAgICAgICAgICAgICAgPHRoPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPiM8L2k+RW50cnk8L3RoPlxuICAgICAgICAgICAgICAgICAgPHRoPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPnI8L2k+UmFkaXVzPC90aD5cbiAgICAgICAgICAgICAgICAgIDx0aD48aSBhcmlhLWhpZGRlbj1cInRydWVcIj5oPC9pPkhlaWdodDwvdGg+XG4gICAgICAgICAgICAgICAgICA8dGg+PGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+PTwvaT5Wb2x1bWU8L3RoPlxuICAgICAgICAgICAgICAgICAgPHRoIGFyaWEtbGFiZWw9XCJBY3Rpb25zXCIgLz5cbiAgICAgICAgICAgICAgICA8L3RyPlxuICAgICAgICAgICAgICA8L3RoZWFkPlxuICAgICAgICAgICAgICA8dGJvZHk+XG4gICAgICAgICAgICAgICAge2VudHJpZXMubWFwKChlLCBpKSA9PiAoXG4gICAgICAgICAgICAgICAgICA8dHIga2V5PXtpfT5cbiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT1cImluZGV4LWNlbGxcIj4je2kgKyAxfTwvdGQ+XG4gICAgICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInJhdy12YWxcIj57ZS5hX3Jhd308L2Rpdj5cbiAgICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImluLXZhbFwiPntmbXRJbihlLmFfaW4pfTwvZGl2PlxuICAgICAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICAgICAgICA8dGQ+XG4gICAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJyYXctdmFsXCI+e2UuYl9yYXd9PC9kaXY+XG4gICAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJpbi12YWxcIj57Zm10SW4oZS5iX2luKX08L2Rpdj5cbiAgICAgICAgICAgICAgICAgICAgPC90ZD5cbiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT1cInZvbC1jZWxsXCI+eygrZS52b2x1bWUpLnRvRml4ZWQoMyl9IGZ0MzwvdGQ+XG4gICAgICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgICAgICA8YnV0dG9uIGNsYXNzTmFtZT1cInJtLWJ0blwiIG9uQ2xpY2s9eygpID0+IHJlbW92ZUVudHJ5KGkpfSBhcmlhLWxhYmVsPXtgUmVtb3ZlIGVudHJ5ICR7aSArIDF9YH0+XG4gICAgICAgICAgICAgICAgICAgICAgICA8aSBhcmlhLWhpZGRlbj1cInRydWVcIj54PC9pPlxuICAgICAgICAgICAgICAgICAgICAgICAgUmVtb3ZlXG4gICAgICAgICAgICAgICAgICAgICAgPC9idXR0b24+XG4gICAgICAgICAgICAgICAgICAgIDwvdGQ+XG4gICAgICAgICAgICAgICAgICA8L3RyPlxuICAgICAgICAgICAgICAgICkpfVxuICAgICAgICAgICAgICA8L3Rib2R5PlxuICAgICAgICAgICAgPC90YWJsZT5cbiAgICAgICAgICA8L2Rpdj5cblxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidG90YWwtYmFyXCI+XG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJ0b3RhbC1sYWJlbFwiPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPj08L2k+VG90YWwgVm9sdW1lPC9zcGFuPlxuICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwidG90YWwtdmFsdWVcIj57dG90YWwudG9GaXhlZCgzKX08c21hbGw+ZnQzPC9zbWFsbD48L3NwYW4+XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgIDwvPlxuICAgICAgKX1cblxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJtYW51YWwtYm94XCI+XG4gICAgICAgIDxoMz48aSBhcmlhLWhpZGRlbj1cInRydWVcIj4rPC9pPkFkZCBlbnRyeSBtYW51YWxseTwvaDM+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwibWFudWFsLXJvd1wiPlxuICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgdHlwZT1cIm51bWJlclwiIHN0ZXA9XCIwLjFcIiBwbGFjZWhvbGRlcj1cIlJhZGl1c1wiXG4gICAgICAgICAgICB2YWx1ZT17bVJ9IG9uQ2hhbmdlPXtlID0+IHNldE1SKGUudGFyZ2V0LnZhbHVlKX1cbiAgICAgICAgICAvPlxuICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgdHlwZT1cIm51bWJlclwiIHN0ZXA9XCIxXCIgcGxhY2Vob2xkZXI9XCJIZWlnaHRcIlxuICAgICAgICAgICAgdmFsdWU9e21IfSBvbkNoYW5nZT17ZSA9PiBzZXRNSChlLnRhcmdldC52YWx1ZSl9XG4gICAgICAgICAgLz5cbiAgICAgICAgICA8YnV0dG9uIG9uQ2xpY2s9e2hhbmRsZUFkZE1hbnVhbH0+XG4gICAgICAgICAgICA8aSBhcmlhLWhpZGRlbj1cInRydWVcIj4rPC9pPlxuICAgICAgICAgICAgQWRkXG4gICAgICAgICAgPC9idXR0b24+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cIm1hbnVhbC1oaW50XCI+XG4gICAgICAgICAgUmFkaXVzIGluIGluY2hlcy4gSGVpZ2h0IGluIGZ0LmluIG5vdGF0aW9uLCBmb3IgZXhhbXBsZSAzNiBpcyAzIGZ0IDYgaW4uXG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxkaXYgY2xhc3NOYW1lPVwicmVzdWx0cy1hY3Rpb25zXCI+XG4gICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiYWN0aW9uLWJ0biBoaXN0XCIgb25DbGljaz17aGFuZGxlU2F2ZX0gZGlzYWJsZWQ9e3NhdmVEaXNhYmxlZH0+XG4gICAgICAgICAgPGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+e3NhdmVEaXNhYmxlZCA/ICcuLi4nIDogc2F2ZUxhYmVsID09PSAnU2F2ZWQhJyA/ICcrJyA6ICcjJ308L2k+XG4gICAgICAgICAge3NhdmVMYWJlbH1cbiAgICAgICAgPC9idXR0b24+XG4gICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiYWN0aW9uLWJ0biBzY2FuXCIgb25DbGljaz17cmV0YWtlfT5cbiAgICAgICAgICA8aSBhcmlhLWhpZGRlbj1cInRydWVcIj5bXTwvaT5cbiAgICAgICAgICBTY2FuIEFub3RoZXJcbiAgICAgICAgPC9idXR0b24+XG4gICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiYWN0aW9uLWJ0biBkYW5nZXJcIiBvbkNsaWNrPXtyZXNldEFsbH0+XG4gICAgICAgICAgPGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+eDwvaT5cbiAgICAgICAgICBTdGFydCBPdmVyXG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gICk7XG59XG4iXSwiZmlsZSI6IkQ6L3dvb2RhcHAtcHJvamVjdC93b29kYXBwLXByb2plY3Qvd29vZGFwcC1yZWFjdC9zcmMvcGFnZXMvY2FsY3VsYXRvci9jb21wb25lbnRzL1Jlc3VsdHNTY3JlZW4uanN4In0=

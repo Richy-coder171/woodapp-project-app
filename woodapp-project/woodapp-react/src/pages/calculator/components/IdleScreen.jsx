@@ -18,7 +18,7 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
       </button>
 
       <div className="idle-actions">
-        <button className="btn-ghost" onClick={() => setScreen('history')}>
+        <button className="btn btn-secondary" onClick={() => setScreen('history')}>
           <i aria-hidden="true">#</i>
           View History
         </button>

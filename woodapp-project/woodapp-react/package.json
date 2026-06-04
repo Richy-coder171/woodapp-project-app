@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "network:update": "powershell -ExecutionPolicy Bypass -File ../scripts/update-network.ps1",
+    "android:refresh-network": "npm run network:update && npm run build && npx cap sync android",
     "build": "vite build",
     "preview": "vite preview",
     "cap:add:android": "npx cap add android",

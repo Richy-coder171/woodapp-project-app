@@ -265,6 +265,8 @@ header h1 {
 .rm-btn,
 .manual-row button,
 .server-retry,
+.google-auth-btn,
+.google-auth-placeholder,
 .cam-btn,
 .shutter-btn,
 .admin-back-btn {
@@ -566,6 +568,106 @@ header h1 {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-hair);
+}
+
+.google-auth-slot {
+  position: relative;
+  min-height: 44px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.google-auth-slot > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.google-auth-placeholder {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  background: var(--white);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.google-auth-btn {
+  width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--white);
+  color: var(--ink-soft);
+  box-shadow: 4px 4px 0 rgba(58, 51, 40, 0.08);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.google-auth-btn i {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(24, 21, 15, 0.22);
+  color: #1a73e8;
+  background: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.google-auth-btn:hover {
+  border-color: var(--moss);
+  background: #fff;
+}
+
+.google-auth-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.google-auth-placeholder:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.google-auth-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  background: rgba(255, 250, 240, 0.84);
+  color: var(--moss-dark);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .auth-err,

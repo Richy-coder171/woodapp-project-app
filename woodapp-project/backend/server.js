@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,6 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-to-32-char-random-stri
 const ADMIN_KEY = process.env.ADMIN_KEY || 'your-admin-secret-key-here';
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_KEY = process.env.GROQ_API_KEY || '';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
 
 if (!GEMINI_KEY && !GROQ_KEY) {
   console.error('ERROR: At least one AI API key required.');
@@ -46,6 +48,17 @@ db.serialize(() => {
     last_scan_date TEXT DEFAULT '',
     created_at INTEGER DEFAULT (strftime('%s','now') * 1000)
   )`);
+
+  db.run(`ALTER TABLE users ADD COLUMN google_sub TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('Failed to add google_sub column:', err.message);
+  });
+  db.run(`ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'password'`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('Failed to add auth_provider column:', err.message);
+  });
+  db.run(`ALTER TABLE users ADD COLUMN display_name TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) console.error('Failed to add display_name column:', err.message);
+  });
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL`);
 
   db.run(`CREATE TABLE IF NOT EXISTS scan_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,6 +108,73 @@ const checkDailyLimit = (user) => {
   return { allowed: remaining > 0, remaining, reset: false };
 };
 
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const sendAuthResponse = (res, user) => {
+  const today = new Date().toISOString().split('T')[0];
+  const sub = checkSubscription(user);
+  const limit = checkDailyLimit(user);
+  const used = user.last_scan_date === today ? (user.daily_scan_count || 0) : 0;
+  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      subscription: sub,
+      scans: { used, limit: DAILY_SCAN_LIMIT, remaining: limit.remaining }
+    }
+  });
+};
+
+async function verifyGoogleCredential(credential) {
+  if (!GOOGLE_CLIENT_ID) {
+    const err = new Error('Google sign-in is not configured. Add GOOGLE_CLIENT_ID to backend .env and restart the server.');
+    err.status = 503;
+    throw err;
+  }
+
+  if (!credential) {
+    const err = new Error('Google credential is required');
+    err.status = 400;
+    throw err;
+  }
+
+  const googleRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+  const profile = await googleRes.json();
+
+  if (!googleRes.ok) {
+    const err = new Error(profile.error_description || profile.error || 'Invalid Google credential');
+    err.status = 401;
+    throw err;
+  }
+
+  if (profile.aud !== GOOGLE_CLIENT_ID) {
+    const err = new Error('Google credential was created for a different app');
+    err.status = 401;
+    throw err;
+  }
+
+  if (profile.iss !== 'accounts.google.com' && profile.iss !== 'https://accounts.google.com') {
+    const err = new Error('Invalid Google credential issuer');
+    err.status = 401;
+    throw err;
+  }
+
+  if (profile.email_verified !== 'true' && profile.email_verified !== true) {
+    const err = new Error('Google email is not verified');
+    err.status = 401;
+    throw err;
+  }
+
+  return {
+    sub: profile.sub,
+    email: normalizeEmail(profile.email),
+    name: profile.name || ''
+  };
+}
+
 const incrementScanCount = (userId, callback) => {
   const today = new Date().toISOString().split('T')[0];
   db.get(`SELECT daily_scan_count, last_scan_date FROM users WHERE id = ?`, [userId], (err, user) => {
@@ -117,8 +197,74 @@ const incrementScanCount = (userId, callback) => {
 
 // ================= AUTH ROUTES =================
 
+app.get('/api/auth/google/config', (req, res) => {
+  res.json({
+    enabled: Boolean(GOOGLE_CLIENT_ID),
+    clientId: GOOGLE_CLIENT_ID
+  });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  let profile;
+
+  try {
+    profile = await verifyGoogleCredential(req.body?.credential);
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+
+  db.get(`SELECT * FROM users WHERE google_sub = ? OR LOWER(email) = ?`, [profile.sub, profile.email], async (err, user) => {
+    if (err) return res.status(500).json({ error: 'Server error' });
+
+    if (user) {
+      if (user.google_sub && user.google_sub !== profile.sub) {
+        return res.status(409).json({ error: 'This email is already linked to a different Google account' });
+      }
+
+      const provider = user.auth_provider === 'password' ? 'password_google' : (user.auth_provider || 'google');
+      db.run(
+        `UPDATE users SET google_sub = COALESCE(google_sub, ?), auth_provider = ?, display_name = COALESCE(?, display_name) WHERE id = ?`,
+        [profile.sub, provider, profile.name || null, user.id],
+        (updateErr) => {
+          if (updateErr) return res.status(500).json({ error: 'Failed to link Google account' });
+          sendAuthResponse(res, { ...user, google_sub: user.google_sub || profile.sub, auth_provider: provider, display_name: profile.name || user.display_name });
+        }
+      );
+      return;
+    }
+
+    try {
+      const hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+      db.run(
+        `INSERT INTO users (email, password_hash, google_sub, auth_provider, display_name) VALUES (?, ?, ?, 'google', ?)`,
+        [profile.email, hash, profile.sub, profile.name],
+        function(insertErr) {
+          if (insertErr) return res.status(500).json({ error: 'Google registration failed' });
+
+          sendAuthResponse(res, {
+            id: this.lastID,
+            email: profile.email,
+            subscription_status: 'inactive',
+            current_period_start: null,
+            current_period_end: null,
+            daily_scan_count: 0,
+            last_scan_date: '',
+            google_sub: profile.sub,
+            auth_provider: 'google',
+            display_name: profile.name
+          });
+        }
+      );
+    } catch {
+      res.status(500).json({ error: 'Google registration failed' });
+    }
+  });
+});
+
 app.post('/api/register', async (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const { password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
@@ -162,13 +308,14 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const { password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
   }
 
-  db.get(`SELECT * FROM users WHERE email = ?`, [email], async (err, user) => {
+  db.get(`SELECT * FROM users WHERE LOWER(email) = ?`, [email], async (err, user) => {
     if (err || !user) {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
@@ -612,7 +759,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'WoodApp API', version: '1.0.0',
-    endpoints: ['POST /api/register','POST /api/login','GET /api/me','POST /api/scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/health']
+    endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/health']
   });
 });
 

@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "vite",
     "network:update": "powershell -ExecutionPolicy Bypass -File ../scripts/update-network.ps1",
-    "android:refresh-network": "npm run network:update && npm run build && npx cap sync android",
+    "android:fix-java": "powershell -ExecutionPolicy Bypass -File ../scripts/fix-android-java.ps1",
+    "android:sync": "npx cap sync android && npm run android:fix-java",
+    "android:refresh-network": "npm run network:update && npm run build && npm run android:sync",
     "build": "vite build",
     "preview": "vite preview",
     "cap:add:android": "npx cap add android",
-    "cap:sync": "npx cap sync",
+    "cap:sync": "npx cap sync && npm run android:fix-java",
     "cap:open:android": "npx cap open android"
   },
   "dependencies": {

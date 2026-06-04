@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Chart, registerables } from 'chart.js';
+import { API_ORIGIN } from '../../config';
 Chart.register(...registerables);
 
 /* ── XSS guard ── */
@@ -43,7 +44,7 @@ function getLast30Days() {
    LOGIN
 ═══════════════════════════════════════ */
 function Login({ onLogin }) {
-  const [url, setUrl]   = useState(() => localStorage.getItem('woodapp_api_url') || 'http://192.168.184.132:3001');
+  const [url, setUrl]   = useState(() => localStorage.getItem('woodapp_api_url') || API_ORIGIN);
   const [key, setKey]   = useState('');
   const [err, setErr]   = useState('');
 

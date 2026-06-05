@@ -15,6 +15,22 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_KEY = process.env.GROQ_API_KEY || '';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
 
+const readPositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const readPositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const UPI_ID = String(process.env.UPI_ID || '').trim();
+const UPI_PAYEE_NAME = String(process.env.UPI_PAYEE_NAME || 'WoodApp').trim();
+const SUBSCRIPTION_DAYS = readPositiveInt(process.env.SUBSCRIPTION_DAYS, 30);
+const SUBSCRIPTION_AMOUNT_INR = readPositiveNumber(process.env.SUBSCRIPTION_AMOUNT_INR, 499);
+const SUBSCRIPTION_AMOUNT_PAISE = Math.round(SUBSCRIPTION_AMOUNT_INR * 100);
+
 if (!GEMINI_KEY && !GROQ_KEY) {
   console.error('ERROR: At least one AI API key required.');
   console.error('  GEMINI_API_KEY → https://aistudio.google.com/apikey (free)');
@@ -69,6 +85,28 @@ db.serialize(() => {
     scanned_at INTEGER DEFAULT (strftime('%s','now') * 1000),
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS payment_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    amount_paise INTEGER NOT NULL,
+    currency TEXT DEFAULT 'INR',
+    upi_id TEXT NOT NULL,
+    payee_name TEXT NOT NULL,
+    reference TEXT UNIQUE NOT NULL,
+    utr TEXT,
+    status TEXT DEFAULT 'created',
+    notes TEXT,
+    created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+    submitted_at INTEGER,
+    verified_at INTEGER,
+    verified_by TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_requests_user_status ON payment_requests(user_id, status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON payment_requests(status, created_at)`);
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_requests_utr ON payment_requests(utr) WHERE utr IS NOT NULL`);
 });
 
 const auth = (req, res, next) => {
@@ -107,6 +145,47 @@ const checkDailyLimit = (user) => {
   const remaining = DAILY_SCAN_LIMIT - (user.daily_scan_count || 0);
   return { allowed: remaining > 0, remaining, reset: false };
 };
+
+const formatAmountInr = (paise = SUBSCRIPTION_AMOUNT_PAISE) => (paise / 100).toFixed(2);
+
+const normalizeUtr = (utr) => String(utr || '').trim().replace(/\s+/g, '').toUpperCase();
+
+const isValidUtr = (utr) => /^[A-Z0-9-]{6,40}$/.test(utr);
+
+const paymentConfigReady = () => UPI_ID && /^[\w.-]+@[\w.-]+$/.test(UPI_ID);
+
+const makePaymentReference = (userId) =>
+  `WOOD${userId}${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+
+const buildUpiIntent = (payment) => {
+  const params = new URLSearchParams({
+    pa: payment.upi_id,
+    pn: payment.payee_name,
+    am: formatAmountInr(payment.amount_paise),
+    cu: payment.currency || 'INR',
+    tr: payment.reference,
+    tn: payment.reference
+  });
+  return `upi://pay?${params.toString()}`;
+};
+
+const serializePayment = (payment) => ({
+  id: payment.id,
+  email: payment.email,
+  amount: formatAmountInr(payment.amount_paise),
+  amountLabel: `INR ${formatAmountInr(payment.amount_paise)}`,
+  currency: payment.currency || 'INR',
+  upiId: payment.upi_id,
+  payeeName: payment.payee_name,
+  reference: payment.reference,
+  utr: payment.utr,
+  status: payment.status,
+  notes: payment.notes,
+  upiIntent: buildUpiIntent(payment),
+  createdAt: payment.created_at ? new Date(payment.created_at).toISOString() : null,
+  submittedAt: payment.submitted_at ? new Date(payment.submitted_at).toISOString() : null,
+  verifiedAt: payment.verified_at ? new Date(payment.verified_at).toISOString() : null
+});
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -362,6 +441,113 @@ app.get('/api/me', auth, (req, res) => {
       }
     });
   });
+});
+
+// ================= UPI PAYMENT REQUESTS =================
+
+app.post('/api/payment/request', auth, (req, res) => {
+  if (!paymentConfigReady()) {
+    return res.status(503).json({
+      error: 'UPI payment is not configured. Add UPI_ID to backend .env and restart the server.'
+    });
+  }
+
+  db.get(`SELECT * FROM users WHERE id = ?`, [req.user.id], (err, user) => {
+    if (err || !user) return res.status(404).json({ error: 'User not found' });
+
+    const subscription = checkSubscription(user);
+    if (subscription.active) {
+      return res.json({ success: true, alreadyActive: true, subscription });
+    }
+
+    db.get(
+      `SELECT * FROM payment_requests
+       WHERE user_id = ? AND status IN ('created', 'submitted')
+       ORDER BY created_at DESC LIMIT 1`,
+      [user.id],
+      (err, existing) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (existing) {
+          return res.json({
+            success: true,
+            payment: serializePayment(existing),
+            subscriptionDays: SUBSCRIPTION_DAYS
+          });
+        }
+
+        const reference = makePaymentReference(user.id);
+        db.run(
+          `INSERT INTO payment_requests
+           (user_id, email, amount_paise, currency, upi_id, payee_name, reference, status)
+           VALUES (?, ?, ?, 'INR', ?, ?, ?, 'created')`,
+          [user.id, user.email, SUBSCRIPTION_AMOUNT_PAISE, UPI_ID, UPI_PAYEE_NAME, reference],
+          function(insertErr) {
+            if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+            db.get(`SELECT * FROM payment_requests WHERE id = ?`, [this.lastID], (getErr, payment) => {
+              if (getErr || !payment) return res.status(500).json({ error: 'Failed to load payment request' });
+              res.json({
+                success: true,
+                payment: serializePayment(payment),
+                subscriptionDays: SUBSCRIPTION_DAYS
+              });
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
+app.post('/api/payment/submit-utr', auth, (req, res) => {
+  const paymentId = Number(req.body.paymentId);
+  const utr = normalizeUtr(req.body.utr);
+
+  if (!paymentId) return res.status(400).json({ error: 'Payment request id is required' });
+  if (!isValidUtr(utr)) return res.status(400).json({ error: 'Enter a valid UTR/reference number' });
+
+  db.get(
+    `SELECT * FROM payment_requests WHERE id = ? AND user_id = ?`,
+    [paymentId, req.user.id],
+    (err, payment) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!payment) return res.status(404).json({ error: 'Payment request not found' });
+      if (payment.status === 'approved') return res.status(409).json({ error: 'This payment is already approved' });
+      if (payment.status === 'rejected') return res.status(409).json({ error: 'This payment was rejected. Create a new payment request.' });
+
+      const now = Date.now();
+      db.run(
+        `UPDATE payment_requests
+         SET utr = ?, status = 'submitted', submitted_at = ?, notes = NULL
+         WHERE id = ? AND user_id = ?`,
+        [utr, now, paymentId, req.user.id],
+        function(updateErr) {
+          if (updateErr) {
+            if (updateErr.message && updateErr.message.includes('UNIQUE')) {
+              return res.status(409).json({ error: 'This UTR has already been submitted' });
+            }
+            return res.status(500).json({ error: updateErr.message });
+          }
+
+          db.get(`SELECT * FROM payment_requests WHERE id = ?`, [paymentId], (getErr, updated) => {
+            if (getErr || !updated) return res.status(500).json({ error: 'Failed to load payment status' });
+            res.json({ success: true, payment: serializePayment(updated) });
+          });
+        }
+      );
+    }
+  );
+});
+
+app.get('/api/payment/status', auth, (req, res) => {
+  db.get(
+    `SELECT * FROM payment_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [req.user.id],
+    (err, payment) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, payment: payment ? serializePayment(payment) : null });
+    }
+  );
 });
 
 // ================= AI SCAN ROUTE (Google Gemini — FREE) =================
@@ -653,6 +839,91 @@ app.get('/api/admin/scans', (req, res) => {
   );
 });
 
+app.get('/api/admin/payments', (req, res) => {
+  const { adminKey, status = 'submitted' } = req.query;
+  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: 'Invalid admin key' });
+
+  const allowed = new Set(['created', 'submitted', 'approved', 'rejected', 'all']);
+  const requestedStatus = allowed.has(status) ? status : 'submitted';
+  const sql = requestedStatus === 'all'
+    ? `SELECT * FROM payment_requests ORDER BY created_at DESC LIMIT 100`
+    : `SELECT * FROM payment_requests WHERE status = ? ORDER BY created_at DESC LIMIT 100`;
+  const params = requestedStatus === 'all' ? [] : [requestedStatus];
+
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows.map(serializePayment));
+  });
+});
+
+app.post('/api/admin/payments/:id/approve', (req, res) => {
+  const { adminKey } = req.body;
+  const days = Math.max(1, parseInt(req.body.days || SUBSCRIPTION_DAYS, 10));
+  const paymentId = Number(req.params.id);
+
+  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: 'Invalid admin key' });
+  if (!paymentId) return res.status(400).json({ error: 'Payment id is required' });
+
+  db.get(`SELECT * FROM payment_requests WHERE id = ?`, [paymentId], (err, payment) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!payment) return res.status(404).json({ error: 'Payment request not found' });
+    if (payment.status === 'approved') return res.json({ success: true, alreadyApproved: true, payment: serializePayment(payment) });
+    if (!payment.utr) return res.status(400).json({ error: 'UTR must be submitted before approval' });
+
+    const now = Date.now();
+    const periodEnd = now + (days * 86400000);
+
+    db.run(
+      `UPDATE users
+       SET subscription_status = 'active', current_period_start = ?, current_period_end = ?
+       WHERE id = ?`,
+      [now, periodEnd, payment.user_id],
+      function(userErr) {
+        if (userErr) return res.status(500).json({ error: userErr.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+
+        db.run(
+          `UPDATE payment_requests
+           SET status = 'approved', verified_at = ?, verified_by = 'admin', notes = NULL
+           WHERE id = ?`,
+          [now, paymentId],
+          function(paymentErr) {
+            if (paymentErr) return res.status(500).json({ error: paymentErr.message });
+            res.json({
+              success: true,
+              email: payment.email,
+              daysAdded: days,
+              activeUntil: new Date(periodEnd).toISOString()
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
+app.post('/api/admin/payments/:id/reject', (req, res) => {
+  const { adminKey } = req.body;
+  const paymentId = Number(req.params.id);
+  const notes = String(req.body.notes || 'Rejected by admin').slice(0, 300);
+
+  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: 'Invalid admin key' });
+  if (!paymentId) return res.status(400).json({ error: 'Payment id is required' });
+
+  const now = Date.now();
+  db.run(
+    `UPDATE payment_requests
+     SET status = 'rejected', notes = ?, verified_at = ?, verified_by = 'admin'
+     WHERE id = ? AND status != 'approved'`,
+    [notes, now, paymentId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Payment request not found or already approved' });
+      res.json({ success: true, paymentId, notes });
+    }
+  );
+});
+
 app.post('/api/save-scan', auth, (req, res) => {
   const { entries, totalVolume, imagePreview } = req.body;
   if (!entries || !Array.isArray(entries)) return res.status(400).json({ error: 'Entries required' });
@@ -759,7 +1030,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'WoodApp API', version: '1.0.0',
-    endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/health']
+    endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/payment/request','POST /api/payment/submit-utr','GET /api/payment/status','POST /api/scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/admin/payments','POST /api/admin/payments/:id/approve','POST /api/admin/payments/:id/reject','GET /api/health']
   });
 });
 

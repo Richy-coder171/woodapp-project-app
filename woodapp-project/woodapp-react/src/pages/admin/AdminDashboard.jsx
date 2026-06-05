@@ -103,6 +103,7 @@ export default function AdminDashboard() {
 
   const [allUsers, setAllUsers]     = useState([]);
   const [allScans, setAllScans]     = useState([]);
+  const [payments, setPayments]     = useState([]);
   const [auditLog, setAuditLog]     = useState([]);
   const [toast, setToast]           = useState({ msg: '', err: false, show: false });
 
@@ -124,12 +125,14 @@ export default function AdminDashboard() {
   const [limitEmail, setLimitEmail] = useState('');
   const [limitVal, setLimitVal]     = useState('10');
   const [revenuePrice, setRevenuePrice] = useState('9.99');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('submitted');
 
   // Scan filter
   const [scanFrom, setScanFrom]     = useState('');
   const [scanTo, setScanTo]         = useState('');
   const [lastUserUpdate, setLastUserUpdate]   = useState('Never updated');
   const [lastScanUpdate, setLastScanUpdate]   = useState('Never updated');
+  const [lastPaymentUpdate, setLastPaymentUpdate] = useState('Never updated');
 
   // Charts
   const scanChartRef    = useRef(null);
@@ -171,13 +174,24 @@ export default function AdminDashboard() {
     } catch (e) { showToast('Failed to load scans: ' + e.message, true); }
   }, [apiBase, adminKey]);
 
+  const loadPayments = useCallback(async (status = paymentStatusFilter) => {
+    try {
+      const res = await fetch(`${apiBase}/admin/payments?adminKey=${encodeURIComponent(adminKey)}&status=${encodeURIComponent(status)}`);
+      if (!res.ok) throw new Error('Failed to load payments');
+      const data = await res.json();
+      setPayments(data);
+      setLastPaymentUpdate('Last updated: ' + new Date().toLocaleTimeString());
+    } catch (e) { showToast('Failed to load payments: ' + e.message, true); }
+  }, [apiBase, adminKey, paymentStatusFilter]);
+
   useEffect(() => {
     if (!loggedIn) return;
     loadUsers();
     loadScans();
-    const t = setInterval(() => { loadUsers(); loadScans(); }, 30000);
+    loadPayments();
+    const t = setInterval(() => { loadUsers(); loadScans(); loadPayments(); }, 30000);
     return () => clearInterval(t);
-  }, [loggedIn, loadUsers, loadScans]);
+  }, [loggedIn, loadUsers, loadScans, loadPayments]);
 
   /* ── Charts ── */
   useEffect(() => {
@@ -244,6 +258,7 @@ export default function AdminDashboard() {
   const expiringSoon = allUsers.filter(u => u.subscription.active && u.subscription.daysLeft > 0 && u.subscription.daysLeft <= 7);
   const expired      = allUsers.filter(u => u.subscription.reason === 'expired');
   const revenue      = (parseFloat(revenuePrice) || 0) * active.length;
+  const pendingPayments = payments.filter(p => p.status === 'submitted');
 
   /* ── Users table ── */
   const filteredUsers = (() => {
@@ -306,6 +321,45 @@ export default function AdminDashboard() {
       if (data.success) { showToast(`Scan limit for ${email} set to ${limit}`); addAudit(`Set scan limit for ${email} to ${limit}`); setLimitEmail(''); loadUsers(); }
       else showToast(data.error || 'Backend endpoint not yet available', true);
     } catch (e) { showToast('Endpoint not available: ' + e.message, true); }
+  }
+
+  async function approvePayment(paymentId, email) {
+    try {
+      const res = await fetch(`${apiBase}/admin/payments/${paymentId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminKey, days: 30 }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Approved payment for ${email}`);
+        addAudit(`Approved UTR payment for ${email}`);
+        setModal(null);
+        loadPayments();
+        loadUsers();
+      } else {
+        showToast(data.error || 'Failed to approve payment', true);
+      }
+    } catch (e) { showToast('Error: ' + e.message, true); }
+  }
+
+  async function rejectPayment(paymentId, email) {
+    try {
+      const res = await fetch(`${apiBase}/admin/payments/${paymentId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminKey, notes: 'Rejected after UTR review' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Rejected payment for ${email}`);
+        addAudit(`Rejected UTR payment for ${email}`);
+        setModal(null);
+        loadPayments();
+      } else {
+        showToast(data.error || 'Failed to reject payment', true);
+      }
+    } catch (e) { showToast('Error: ' + e.message, true); }
   }
 
   async function bulkExtend() {
@@ -374,6 +428,7 @@ export default function AdminDashboard() {
             { label: 'Active Subs',    value: active.length,   sub: 'Paying customers',    color: '#c084fc' },
             { label: 'Expiring Soon',  value: expiringSoon.length, sub: 'Within 7 days',  color: '#f5a623' },
             { label: 'Expired',        value: expired.length,  sub: 'Need renewal',        color: '#c084fc' },
+            { label: 'Pending UTR',    value: pendingPayments.length, sub: 'Needs review', color: '#f5a623' },
             { label: 'Total Scans',    value: allScans.length, sub: 'All time',            color: '#c084fc' },
           ].map(s => (
             <div key={s.label} style={styles.statCard}>
@@ -424,6 +479,83 @@ export default function AdminDashboard() {
             <input style={styles.formInput} type="email" placeholder="User email" value={limitEmail} onChange={e => setLimitEmail(e.target.value)} />
             <input style={styles.formInput} type="number" placeholder="New daily scan limit" value={limitVal} min="1" onChange={e => setLimitVal(e.target.value)} />
             <button style={styles.formBtn} onClick={setScanLimit}>Set Limit</button>
+          </div>
+        </div>
+
+        {/* UPI payment verification */}
+        <div style={styles.tableWrap}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+            <h2 style={{ color: '#c084fc', fontSize: 18 }}>UPI UTR Verification</h2>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ color: '#3d2060', fontSize: 12 }}>{lastPaymentUpdate}</span>
+              <select
+                style={{ ...styles.formInput, flex: '0 0 150px', minWidth: 150, padding: '7px 10px', fontSize: 12 }}
+                value={paymentStatusFilter}
+                onChange={e => { setPaymentStatusFilter(e.target.value); loadPayments(e.target.value); }}
+              >
+                <option value="submitted">Submitted</option>
+                <option value="created">Created</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+              <button style={styles.btnSm} onClick={() => loadPayments()}>Refresh</button>
+            </div>
+          </div>
+
+          <p style={{ color: '#5b3a7a', fontSize: 12, marginBottom: 10 }}>
+            Verify the amount and UTR in your bank/UPI account before approving. Approval activates the user's subscription.
+          </p>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#12092a' }}>
+                  {['ID','User','Amount','Reference','UTR','Status','Submitted','Actions'].map(h => <Th key={h} noSort>{h}</Th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {payments.length === 0 ? (
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: '#5b3a7a', padding: 16 }}>No payment requests found</td></tr>
+                ) : payments.map(p => (
+                  <tr key={p.id}>
+                    <Td>{p.id}</Td>
+                    <Td>{p.email}</Td>
+                    <Td>{p.amountLabel}</Td>
+                    <Td style={{ fontFamily: 'monospace', color: '#a855f7', maxWidth: 160, overflowWrap: 'anywhere' }}>{p.reference}</Td>
+                    <Td style={{ fontFamily: 'monospace', color: '#e8d8f5', maxWidth: 150, overflowWrap: 'anywhere' }}>{p.utr || '-'}</Td>
+                    <Td style={{ color: p.status === 'submitted' ? '#f5a623' : p.status === 'approved' ? '#6abf50' : p.status === 'rejected' ? '#ff7070' : '#5b3a7a', fontWeight: 700 }}>
+                      {String(p.status || '').toUpperCase()}
+                    </Td>
+                    <Td>{p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '-'}</Td>
+                    <Td>
+                      <button
+                        style={styles.actionBtn}
+                        disabled={p.status === 'approved' || !p.utr}
+                        onClick={() => setModal({
+                          title: 'Approve UTR Payment',
+                          body: `Activate ${p.email} for 30 days? Verify UTR ${p.utr} and amount ${p.amountLabel} in your bank first.`,
+                          onConfirm: () => approvePayment(p.id, p.email)
+                        })}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        style={{ ...styles.actionBtn, color: '#ff7070' }}
+                        disabled={p.status === 'approved' || p.status === 'rejected'}
+                        onClick={() => setModal({
+                          title: 'Reject UTR Payment',
+                          body: `Reject payment request ${p.id} from ${p.email}?`,
+                          onConfirm: () => rejectPayment(p.id, p.email)
+                        })}
+                      >
+                        Reject
+                      </button>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

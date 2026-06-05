@@ -3,5 +3,5 @@
 export const LOCAL_NETWORK = {
   serverIp: '10.253.198.103',
   serverPort: '3001',
-  updatedAt: '2026-06-05T08:57:13.807Z',
+  updatedAt: '2026-06-05T10:55:22.371Z',
 };

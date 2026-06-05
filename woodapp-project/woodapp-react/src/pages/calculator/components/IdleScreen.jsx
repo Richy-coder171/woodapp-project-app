@@ -1,4 +1,8 @@
+import { useNavigate } from 'react-router-dom';
+
 export default function IdleScreen({ userInfo, userScans, startCamera, setScreen, logout }) {
+  const navigate = useNavigate();
+
   return (
     <div className="screen idle-screen">
       <div className="idle-panel">
@@ -30,7 +34,7 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
           <i aria-hidden="true">=</i>
           {userScans.remaining} scans left today
         </div>
-        <button className="btn-ghost" onClick={() => setScreen('admin')}>
+        <button className="btn-ghost" onClick={() => navigate('/admindashboard')}>
           <i aria-hidden="true">*</i>
           Admin Dashboard
         </button>

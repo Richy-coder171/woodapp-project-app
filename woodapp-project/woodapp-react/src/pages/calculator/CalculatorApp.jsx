@@ -13,7 +13,6 @@ import ResultsScreen from './components/ResultsScreen';
 import HistoryScreen from './components/HistoryScreen';
 import OfflineScreen from './components/OfflineScreen';
 import SkeletonScreen from './components/SkeletonScreen';
-import AdminDashboard from '../admin/AdminDashboard';
 
 export default function CalculatorApp() {
   const [screen, setScreen]               = useState(() => localStorage.getItem('wood_auth_token') ? 'skeleton' : 'auth');
@@ -265,17 +264,6 @@ export default function CalculatorApp() {
       {screen === 'results' && <ResultsScreen {...props} />}
       {screen === 'history' && <HistoryScreen {...props} />}
       {screen === 'offline' && <OfflineScreen {...props} />}
-      {screen === 'admin'   && (
-        <div>
-          <button
-            onClick={() => setScreen('idle')}
-            className="admin-back-btn"
-          >
-            Back to App
-          </button>
-          <AdminDashboard />
-        </div>
-      )}
     </div>
   );
 }

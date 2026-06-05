@@ -13,7 +13,6 @@ import ResultsScreen from './components/ResultsScreen';
 import HistoryScreen from './components/HistoryScreen';
 import OfflineScreen from './components/OfflineScreen';
 import SkeletonScreen from './components/SkeletonScreen';
-import AdminDashboard from '../admin/AdminDashboard';
 
 export default function CalculatorApp() {
   const [screen, setScreen]               = useState(() => localStorage.getItem('wood_auth_token') ? 'skeleton' : 'auth');
@@ -53,15 +52,18 @@ export default function CalculatorApp() {
       });
       clearTimeout(timeout);
 
-      // Token is invalid or expired, so require login again.
-      if (res.status === 401) {
+      // Token is invalid, expired, or points at a user no longer in this DB.
+      if (res.status === 401 || res.status === 404) {
         localStorage.removeItem('wood_auth_token');
         setAuthToken(null);
         setScreen('auth');
         return;
       }
 
-      if (!res.ok) throw new Error('Server error');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server returned status ${res.status}`);
+      }
       const data = await res.json();
 
       if (!data.subscription.active) {
@@ -78,10 +80,21 @@ export default function CalculatorApp() {
       setUserInfo(`${data.email} | ${data.subscription.daysLeft} days remaining`);
       setScreen('idle');
     } catch (err) {
-      // Network error / timeout: keep the token.
-      // Keep the user logged in and show a retry option
-      console.log('Session validation failed (network):', err.message);
-      setScreen('offline');
+      const isNetworkError = err.name === 'AbortError'
+        || err.message === 'Failed to fetch'
+        || err.message.includes('NetworkError');
+
+      if (isNetworkError) {
+        // Network error / timeout: keep the token and show a retry option.
+        console.log('Session validation failed (network):', err.message);
+        setScreen('offline');
+        return;
+      }
+
+      console.log('Session validation failed:', err.message);
+      localStorage.removeItem('wood_auth_token');
+      setAuthToken(null);
+      setScreen('auth');
     }
   }
 
@@ -251,17 +264,6 @@ export default function CalculatorApp() {
       {screen === 'results' && <ResultsScreen {...props} />}
       {screen === 'history' && <HistoryScreen {...props} />}
       {screen === 'offline' && <OfflineScreen {...props} />}
-      {screen === 'admin'   && (
-        <div>
-          <button
-            onClick={() => setScreen('idle')}
-            className="admin-back-btn"
-          >
-            Back to App
-          </button>
-          <AdminDashboard />
-        </div>
-      )}
     </div>
   );
 }

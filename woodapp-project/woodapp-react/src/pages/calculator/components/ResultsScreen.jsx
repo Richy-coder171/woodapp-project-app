@@ -103,6 +103,37 @@ export default function ResultsScreen({
             </table>
           </div>
 
+          <div className="mobile-entry-list" aria-label="Found measurements">
+            {entries.map((e, i) => (
+              <div className="mobile-entry-card" key={i}>
+                <div className="mobile-entry-head">
+                  <span>Entry #{i + 1}</span>
+                  <button className="rm-btn" onClick={() => removeEntry(i)} aria-label={`Remove entry ${i + 1}`}>
+                    <i aria-hidden="true">x</i>
+                    Remove
+                  </button>
+                </div>
+                <div className="mobile-entry-grid">
+                  <div>
+                    <span>Radius</span>
+                    <strong>{e.a_raw}</strong>
+                    <small>{fmtIn(e.a_in)}</small>
+                  </div>
+                  <div>
+                    <span>Height</span>
+                    <strong>{e.b_raw}</strong>
+                    <small>{fmtIn(e.b_in)}</small>
+                  </div>
+                  <div>
+                    <span>Volume</span>
+                    <strong>{(+e.volume).toFixed(3)}</strong>
+                    <small>ft3</small>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="total-bar">
             <span className="total-label"><i aria-hidden="true">=</i>Total Volume</span>
             <span className="total-value">{total.toFixed(3)}<small>ft3</small></span>

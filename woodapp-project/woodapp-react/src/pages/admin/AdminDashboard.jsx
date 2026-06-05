@@ -1,673 +1,688 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Chart, registerables } from 'chart.js';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_ORIGIN } from '../../config';
-Chart.register(...registerables);
 
-/* ── XSS guard ── */
-function esc(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function toApiBase(value) {
+  const clean = String(value || API_ORIGIN).trim().replace(/\/+$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
 }
 
-/* ── CSV export ── */
+async function readJson(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function userStatus(user) {
+  const sub = user?.subscription || {};
+  return {
+    active: Boolean(sub.active),
+    reason: sub.reason || 'inactive',
+    daysLeft: Number.isFinite(Number(sub.daysLeft)) ? Number(sub.daysLeft) : 0,
+  };
+}
+
+function scanCount(user) {
+  return {
+    used: Number(user?.scans?.used || 0),
+    limit: Number(user?.scans?.limit || 0),
+  };
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? String(value) : date.toLocaleString();
+}
+
+function formatVolume(value) {
+  const volume = Number(value);
+  return Number.isFinite(volume) ? `${volume.toFixed(3)} ft3` : '-';
+}
+
 function downloadCSV(filename, rows) {
-  const csv = rows.map(r =>
-    r.map(cell => {
-      const s = String(cell ?? '').replace(/"/g, '""');
-      return /[,"\n\r]/.test(s) ? `"${s}"` : s;
-    }).join(',')
-  ).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: filename });
-  a.click();
+  const csv = rows
+    .map(row => row.map(cell => {
+      const value = String(cell ?? '').replace(/"/g, '""');
+      return /[,"\n\r]/.test(value) ? `"${value}"` : value;
+    }).join(','))
+    .join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: filename });
+  link.click();
   URL.revokeObjectURL(url);
 }
 
-/* ── Helpers ── */
-function shortLabel(iso) { const [,m,d] = iso.split('-'); return `${m}/${d}`; }
-function getLast14Days() {
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (13 - i));
-    return d.toISOString().slice(0, 10);
-  });
-}
-function getLast30Days() {
-  return Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (29 - i));
-    return d.toISOString().slice(0, 10);
-  });
-}
-
-/* ═══════════════════════════════════════
-   LOGIN
-═══════════════════════════════════════ */
-function Login({ onLogin }) {
-  const [url, setUrl]   = useState(() => localStorage.getItem('woodapp_api_url') || API_ORIGIN);
-  const [key, setKey]   = useState('');
-  const [err, setErr]   = useState('');
-
-  async function login() {
-    if (!url || !key) { setErr('Please fill all fields'); return; }
-    let base = url.replace(/\/$/, '');
-    if (!base.includes('/api')) base += '/api';
-    try {
-      const res = await fetch(`${base}/admin/users?adminKey=${encodeURIComponent(key)}`);
-      if (!res.ok) throw new Error('Invalid admin key');
-      localStorage.setItem('woodapp_api_url', url);
-      onLogin(base, key);
-    } catch (e) { setErr(e.message); }
-  }
-
-  return (
-    <div style={styles.loginBox}>
-      <h2 style={{ color: '#c084fc', textAlign: 'center', marginBottom: 20 }}>🔐 Admin Dashboard</h2>
-      <input style={styles.input} type="text"     placeholder="API URL (e.g. http://localhost:3001)" value={url} onChange={e => setUrl(e.target.value)} />
-      <input style={styles.input} type="password" placeholder="Admin Key"                             value={key} onChange={e => setKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && login()} />
-      <button style={styles.loginBtn} onClick={login}>Login</button>
-      {err && <p style={{ color: '#ff7070', fontSize: 13, textAlign: 'center', marginTop: 10 }}>{err}</p>}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
-   CHARTS
-═══════════════════════════════════════ */
-function useChart(canvasRef, config) {
-  const chartRef = useRef(null);
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    if (chartRef.current) chartRef.current.destroy();
-    chartRef.current = new Chart(canvasRef.current.getContext('2d'), config);
-    return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, [JSON.stringify(config)]);
-}
-
-const CHART_OPTS = {
-  responsive: true,
-  plugins: { legend: { labels: { color: '#a855f7', font: { size: 11 } } } },
-  scales: {
-    x: { ticks: { color: '#5b3a7a', font: { size: 10 } }, grid: { color: '#1e0f35' } },
-    y: { ticks: { color: '#5b3a7a', font: { size: 10 }, precision: 0 }, grid: { color: '#1e0f35' }, beginAtZero: true },
-  },
-};
-
-/* ═══════════════════════════════════════
-   MAIN DASHBOARD
-═══════════════════════════════════════ */
 export default function AdminDashboard() {
-  const [loggedIn, setLoggedIn]     = useState(false);
-  const [apiBase, setApiBase]       = useState('');
-  const [adminKey, setAdminKey]     = useState('');
+  const navigate = useNavigate();
+  const [apiInput, setApiInput] = useState(() => localStorage.getItem('woodapp_api_url') || API_ORIGIN);
+  const [apiBase, setApiBase] = useState(() => toApiBase(localStorage.getItem('woodapp_api_url') || API_ORIGIN));
+  const [adminKey, setAdminKey] = useState('');
+  const [keyInput, setKeyInput] = useState('');
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [users, setUsers] = useState([]);
+  const [scans, setScans] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [paymentFilter, setPaymentFilter] = useState('submitted');
+  const [search, setSearch] = useState('');
+  const [activateEmail, setActivateEmail] = useState('');
+  const [activateDays, setActivateDays] = useState('30');
+  const [updatedAt, setUpdatedAt] = useState('');
 
-  const [allUsers, setAllUsers]     = useState([]);
-  const [allScans, setAllScans]     = useState([]);
-  const [auditLog, setAuditLog]     = useState([]);
-  const [toast, setToast]           = useState({ msg: '', err: false, show: false });
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter(user => String(user.email || '').toLowerCase().includes(query));
+  }, [users, search]);
 
-  // Users table state
-  const [sortCol, setSortCol]       = useState('id');
-  const [sortDir, setSortDir]       = useState('asc');
-  const [page, setPage]             = useState(0);
-  const [search, setSearch]         = useState('');
-  const [selected, setSelected]     = useState(new Set());
-  const PAGE_SIZE = 20;
+  const stats = useMemo(() => {
+    const active = users.filter(user => userStatus(user).active).length;
+    const expired = users.filter(user => userStatus(user).reason === 'expired').length;
+    const scansToday = users.reduce((sum, user) => sum + scanCount(user).used, 0);
+    const pending = payments.filter(payment => payment.status === 'submitted').length;
+    return [
+      { label: 'Users', value: users.length, note: 'Registered accounts' },
+      { label: 'Active', value: active, note: 'Subscriptions on' },
+      { label: 'Expired', value: expired, note: 'Need renewal' },
+      { label: 'Scans Today', value: scansToday, note: 'Current daily usage' },
+      { label: 'Recent Scans', value: scans.length, note: 'Last 100 records' },
+      { label: 'Pending UTR', value: pending, note: 'Needs review' },
+    ];
+  }, [users, scans, payments]);
 
-  // Modals
-  const [modal, setModal]           = useState(null);  // { title, body, onConfirm }
-  const [userModal, setUserModal]   = useState(null);  // user object
-
-  // Forms
-  const [actEmail, setActEmail]     = useState('');
-  const [actDays, setActDays]       = useState('30');
-  const [limitEmail, setLimitEmail] = useState('');
-  const [limitVal, setLimitVal]     = useState('10');
-  const [revenuePrice, setRevenuePrice] = useState('9.99');
-
-  // Scan filter
-  const [scanFrom, setScanFrom]     = useState('');
-  const [scanTo, setScanTo]         = useState('');
-  const [lastUserUpdate, setLastUserUpdate]   = useState('Never updated');
-  const [lastScanUpdate, setLastScanUpdate]   = useState('Never updated');
-
-  // Charts
-  const scanChartRef    = useRef(null);
-  const subsChartRef    = useRef(null);
-  const revChartRef     = useRef(null);
-  const userChartRef    = useRef(null);
-  const scanChartInst   = useRef(null);
-  const subsChartInst   = useRef(null);
-  const revChartInst    = useRef(null);
-  const userChartInst   = useRef(null);
-
-  /* ── Toast ── */
-  function showToast(msg, isError = false) {
-    setToast({ msg, err: isError, show: true });
-    setTimeout(() => setToast(t => ({ ...t, show: false })), 3000);
-  }
-  function addAudit(msg) {
-    setAuditLog(prev => [{ time: new Date().toLocaleTimeString(), msg }, ...prev]);
-  }
-
-  /* ── Load ── */
-  const loadUsers = useCallback(async () => {
+  async function loadDashboard(nextBase = apiBase, nextKey = adminKey, nextPaymentFilter = paymentFilter) {
+    setLoading(true);
+    setNotice('');
     try {
-      const res  = await fetch(`${apiBase}/admin/users?adminKey=${encodeURIComponent(adminKey)}`);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      setAllUsers(data);
-      setLastUserUpdate('Last updated: ' + new Date().toLocaleTimeString());
-    } catch (e) { showToast('Failed to load users: ' + e.message, true); }
-  }, [apiBase, adminKey]);
+      const loadedUsers = await readJson(`${nextBase}/admin/users?adminKey=${encodeURIComponent(nextKey)}`);
+      const [loadedScans, loadedPayments] = await Promise.all([
+        readJson(`${nextBase}/admin/scans?adminKey=${encodeURIComponent(nextKey)}`).catch(() => []),
+        readJson(`${nextBase}/admin/payments?adminKey=${encodeURIComponent(nextKey)}&status=${encodeURIComponent(nextPaymentFilter)}`).catch(() => []),
+      ]);
 
-  const loadScans = useCallback(async () => {
-    try {
-      const res  = await fetch(`${apiBase}/admin/scans?adminKey=${encodeURIComponent(adminKey)}`);
-      if (!res.ok) throw new Error('Failed to load scans');
-      const data = await res.json();
-      setAllScans(data);
-      setLastScanUpdate('Last updated: ' + new Date().toLocaleTimeString());
-    } catch (e) { showToast('Failed to load scans: ' + e.message, true); }
-  }, [apiBase, adminKey]);
-
-  useEffect(() => {
-    if (!loggedIn) return;
-    loadUsers();
-    loadScans();
-    const t = setInterval(() => { loadUsers(); loadScans(); }, 30000);
-    return () => clearInterval(t);
-  }, [loggedIn, loadUsers, loadScans]);
-
-  /* ── Charts ── */
-  useEffect(() => {
-    if (!loggedIn || !scanChartRef.current) return;
-    const days   = getLast14Days();
-    const counts = days.map(d => allScans.filter(s => s.scanned_at?.slice(0,10) === d).length);
-    if (scanChartInst.current) scanChartInst.current.destroy();
-    scanChartInst.current = new Chart(scanChartRef.current.getContext('2d'), {
-      type: 'line',
-      data: { labels: days.map(shortLabel), datasets: [{ label: 'Scans', data: counts, borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.15)', borderWidth: 2, pointBackgroundColor: '#c084fc', pointRadius: 4, tension: 0.35, fill: true }] },
-      options: CHART_OPTS,
-    });
-  }, [allScans, loggedIn]);
-
-  useEffect(() => {
-    if (!loggedIn || !subsChartRef.current) return;
-    const days = getLast14Days();
-    const ac   = days.map(d => allUsers.filter(u => u.createdAt?.slice(0,10) === d && u.subscription.active).length);
-    const ec   = days.map(d => allUsers.filter(u => u.createdAt?.slice(0,10) === d && u.subscription.reason === 'expired').length);
-    if (subsChartInst.current) subsChartInst.current.destroy();
-    subsChartInst.current = new Chart(subsChartRef.current.getContext('2d'), {
-      type: 'bar',
-      data: { labels: days.map(shortLabel), datasets: [
-        { label: 'Active',  data: ac, backgroundColor: 'rgba(106,191,80,0.75)', borderRadius: 4 },
-        { label: 'Expired', data: ec, backgroundColor: 'rgba(255,112,112,0.65)', borderRadius: 4 },
-      ]},
-      options: { ...CHART_OPTS, scales: { ...CHART_OPTS.scales, x: { ...CHART_OPTS.scales.x, stacked: true }, y: { ...CHART_OPTS.scales.y, stacked: true } } },
-    });
-  }, [allUsers, loggedIn]);
-
-  useEffect(() => {
-    if (!loggedIn || !revChartRef.current) return;
-    const price = parseFloat(revenuePrice) || 0;
-    const days  = getLast30Days();
-    const revs  = days.map(d => {
-      const n = allUsers.filter(u => u.createdAt && u.createdAt.slice(0,10) <= d && u.subscription.active).length;
-      return parseFloat((n * price).toFixed(2));
-    });
-    if (revChartInst.current) revChartInst.current.destroy();
-    revChartInst.current = new Chart(revChartRef.current.getContext('2d'), {
-      type: 'line',
-      data: { labels: days.map(shortLabel), datasets: [{ label: 'Est. Revenue ($)', data: revs, borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.12)', borderWidth: 2, pointBackgroundColor: '#c084fc', pointRadius: 3, tension: 0.3, fill: true }] },
-      options: { ...CHART_OPTS, scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, ticks: { ...CHART_OPTS.scales.y.ticks, callback: v => '$' + v } } } },
-    });
-  }, [allUsers, revenuePrice, loggedIn]);
-
-  useEffect(() => {
-    if (!userModal || !userChartRef.current) return;
-    const userScans = allScans.filter(s => s.user_email === userModal.email);
-    if (!userScans.length) return;
-    const byDate = {};
-    userScans.forEach(s => { const d = s.scanned_at?.slice(0,10) || 'unknown'; byDate[d] = (byDate[d]||0)+1; });
-    const labels = Object.keys(byDate).sort();
-    if (userChartInst.current) userChartInst.current.destroy();
-    userChartInst.current = new Chart(userChartRef.current.getContext('2d'), {
-      type: 'bar',
-      data: { labels: labels.map(shortLabel), datasets: [{ label: 'Scans', data: labels.map(l => byDate[l]), backgroundColor: 'rgba(168,85,247,0.65)', borderRadius: 4 }] },
-      options: { ...CHART_OPTS, plugins: { legend: { display: false } } },
-    });
-  }, [userModal]);
-
-  /* ── Stats ── */
-  const active       = allUsers.filter(u => u.subscription.active);
-  const expiringSoon = allUsers.filter(u => u.subscription.active && u.subscription.daysLeft > 0 && u.subscription.daysLeft <= 7);
-  const expired      = allUsers.filter(u => u.subscription.reason === 'expired');
-  const revenue      = (parseFloat(revenuePrice) || 0) * active.length;
-
-  /* ── Users table ── */
-  const filteredUsers = (() => {
-    const q = search.trim().toLowerCase();
-    let list = q ? allUsers.filter(u => u.email.toLowerCase().includes(q) || u.subscription.reason.toLowerCase().includes(q)) : [...allUsers];
-    list.sort((a, b) => {
-      let av, bv;
-      switch (sortCol) {
-        case 'id':        av = a.id;                    bv = b.id;                    break;
-        case 'email':     av = a.email.toLowerCase();   bv = b.email.toLowerCase();   break;
-        case 'status':    av = a.subscription.reason;   bv = b.subscription.reason;   break;
-        case 'daysLeft':  av = a.subscription.daysLeft; bv = b.subscription.daysLeft; break;
-        case 'scansUsed': av = a.scans.used;             bv = b.scans.used;             break;
-        case 'createdAt': av = new Date(a.createdAt);   bv = new Date(b.createdAt);   break;
-        default:          av = a.id;                    bv = b.id;
-      }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ?  1 : -1;
-      return 0;
-    });
-    return list;
-  })();
-
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
-  const saferPage  = Math.min(page, totalPages - 1);
-  const pageSlice  = filteredUsers.slice(saferPage * PAGE_SIZE, (saferPage + 1) * PAGE_SIZE);
-
-  function sortBy(col) {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('asc'); }
-    setPage(0);
-  }
-
-  /* ── Leaderboard ── */
-  const leaderboard = (() => {
-    const counts = {};
-    allScans.forEach(s => { counts[s.user_email] = (counts[s.user_email]||0)+1; });
-    return Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
-  })();
-  const lbMax = leaderboard[0]?.[1] || 1;
-
-  /* ── Actions ── */
-  async function activateUser() {
-    const email = actEmail.trim(); const days = parseInt(actDays) || 30;
-    if (!email) { showToast('Please enter an email', true); return; }
-    try {
-      const res  = await fetch(`${apiBase}/admin/extend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminKey, email, days }) });
-      const data = await res.json();
-      if (data.success) { showToast(`Activated ${email} for ${days} days`); addAudit(`Activated ${email} for ${days} days`); setActEmail(''); loadUsers(); }
-      else showToast(data.error || 'Failed to activate', true);
-    } catch (e) { showToast('Error: ' + e.message, true); }
-  }
-
-  async function setScanLimit() {
-    const email = limitEmail.trim(); const limit = parseInt(limitVal);
-    if (!email || !limit) { showToast('Fill in email and limit', true); return; }
-    try {
-      const res  = await fetch(`${apiBase}/admin/set-limit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminKey, email, limit }) });
-      const data = await res.json();
-      if (data.success) { showToast(`Scan limit for ${email} set to ${limit}`); addAudit(`Set scan limit for ${email} to ${limit}`); setLimitEmail(''); loadUsers(); }
-      else showToast(data.error || 'Backend endpoint not yet available', true);
-    } catch (e) { showToast('Endpoint not available: ' + e.message, true); }
-  }
-
-  async function bulkExtend() {
-    const emails = [...selected]; let success = 0, failed = 0;
-    for (const email of emails) {
-      try {
-        const res  = await fetch(`${apiBase}/admin/extend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminKey, email, days: 30 }) });
-        const data = await res.json();
-        data.success ? success++ : failed++;
-      } catch { failed++; }
+      setUsers(Array.isArray(loadedUsers) ? loadedUsers : []);
+      setScans(Array.isArray(loadedScans) ? loadedScans : []);
+      setPayments(Array.isArray(loadedPayments) ? loadedPayments : []);
+      setApiBase(nextBase);
+      setAdminKey(nextKey);
+      setLoggedIn(true);
+      setUpdatedAt(new Date().toLocaleTimeString());
+      return true;
+    } catch (err) {
+      setNotice(err.message || 'Unable to load admin dashboard');
+      return false;
+    } finally {
+      setLoading(false);
     }
-    addAudit(`Bulk extend (30 days) — ${success} succeeded, ${failed} failed`);
-    showToast(`Extended ${success} user(s)${failed ? `, ${failed} failed` : ''}`);
-    setSelected(new Set());
-    loadUsers();
   }
 
-  /* ── Filtered scans ── */
-  const filteredScans = allScans.filter(s => {
-    const d = s.scanned_at?.slice(0,10) || '';
-    if (scanFrom && d < scanFrom) return false;
-    if (scanTo   && d > scanTo)   return false;
-    return true;
-  });
-
-  /* ── Login handler ── */
-  function handleLogin(base, key) {
-    setApiBase(base); setAdminKey(key); setLoggedIn(true);
-    showToast('Welcome to Admin Dashboard');
+  async function handleLogin(event) {
+    event.preventDefault();
+    const nextBase = toApiBase(apiInput);
+    const nextKey = keyInput.trim();
+    if (!nextKey) {
+      setNotice('Enter the admin key from backend/.env.');
+      return;
+    }
+    const ok = await loadDashboard(nextBase, nextKey, paymentFilter);
+    if (ok) localStorage.setItem('woodapp_api_url', apiInput.trim());
   }
 
-  if (!loggedIn) return (
-    <div style={{ background: '#0d0a14', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui,-apple-system,sans-serif', color: '#e8d8f5' }}>
-      <Login onLogin={handleLogin} />
-    </div>
-  );
+  async function activateUser(email = activateEmail, days = activateDays) {
+    const cleanEmail = String(email || '').trim();
+    const cleanDays = Math.max(1, Number.parseInt(days, 10) || 30);
+    if (!cleanEmail) {
+      setNotice('Enter a user email to activate.');
+      return;
+    }
+
+    setLoading(true);
+    setNotice('');
+    try {
+      await readJson(`${apiBase}/admin/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminKey, email: cleanEmail, days: cleanDays }),
+      });
+      setActivateEmail('');
+      await loadDashboard(apiBase, adminKey, paymentFilter);
+      setNotice(`Activated ${cleanEmail} for ${cleanDays} days.`);
+    } catch (err) {
+      setNotice(err.message || 'Activation failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updatePayment(payment, action) {
+    const verb = action === 'approve' ? 'approve' : 'reject';
+    const ok = window.confirm(`${verb === 'approve' ? 'Approve' : 'Reject'} payment ${payment.id} for ${payment.email}?`);
+    if (!ok) return;
+
+    setLoading(true);
+    setNotice('');
+    try {
+      await readJson(`${apiBase}/admin/payments/${payment.id}/${verb}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(verb === 'approve'
+          ? { adminKey, days: 30 }
+          : { adminKey, notes: 'Rejected after UTR review' }),
+      });
+      await loadDashboard(apiBase, adminKey, paymentFilter);
+      setNotice(`Payment ${payment.id} ${verb === 'approve' ? 'approved' : 'rejected'}.`);
+    } catch (err) {
+      setNotice(err.message || 'Payment update failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function exportUsers() {
+    downloadCSV('woodapp-users.csv', [
+      ['Email', 'Status', 'Days Left', 'Scans Used', 'Scans Limit', 'Joined'],
+      ...users.map(user => {
+        const status = userStatus(user);
+        const counts = scanCount(user);
+        return [user.email, status.reason, status.daysLeft, counts.used, counts.limit, formatDate(user.createdAt)];
+      }),
+    ]);
+  }
+
+  if (!loggedIn) {
+    return (
+      <main style={styles.page}>
+        <section style={styles.loginPanel}>
+          <div style={styles.brandMark}>W</div>
+          <h1 style={styles.loginTitle}>WoodApp Admin</h1>
+          <p style={styles.loginCopy}>Use the backend URL and admin key to review users, scans, and UTR payments.</p>
+          <form style={styles.loginForm} onSubmit={handleLogin}>
+            <label style={styles.fieldLabel}>
+              API URL
+              <input
+                style={styles.input}
+                value={apiInput}
+                onChange={event => setApiInput(event.target.value)}
+                placeholder="http://localhost:3001"
+              />
+            </label>
+            <label style={styles.fieldLabel}>
+              Admin Key
+              <input
+                style={styles.input}
+                type="password"
+                value={keyInput}
+                onChange={event => setKeyInput(event.target.value)}
+                placeholder="Enter admin key"
+              />
+            </label>
+            {notice && <div style={styles.errorBox}>{notice}</div>}
+            <button style={styles.primaryBtn} disabled={loading}>
+              {loading ? 'Checking...' : 'Open Dashboard'}
+            </button>
+            <button type="button" style={styles.linkBtn} onClick={() => navigate('/')}>
+              Back to calculator
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <div style={{ background: '#0d0a14', minHeight: '100vh', color: '#e8d8f5', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
-      <div style={styles.container}>
-
-        {/* Header */}
-        <div style={styles.header}>
+    <main style={styles.page}>
+      <div style={styles.shell}>
+        <header style={styles.header}>
           <div>
-            <h1 style={{ color: '#c084fc', fontSize: 24 }}>🪵 WoodApp Admin Dashboard</h1>
-            <p style={{ color: '#5b3a7a', fontSize: 14, marginTop: 5 }}>Manage users, subscriptions, and monitor app usage</p>
+            <p style={styles.kicker}>WoodApp Admin</p>
+            <h1 style={styles.title}>Dashboard</h1>
+            <p style={styles.subtitle}>{updatedAt ? `Last updated ${updatedAt}` : apiBase}</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button style={styles.btnExport} onClick={() => { if (!allUsers.length) { showToast('No users loaded yet', true); return; } downloadCSV('woodapp-users.csv', [['ID','Email','Status','Days Left','Scans Used','Scans Limit','Created'], ...allUsers.map(u => [u.id,u.email,u.subscription.reason,u.subscription.daysLeft,u.scans.used,u.scans.limit,new Date(u.createdAt).toLocaleDateString()])]); showToast('Users CSV downloaded'); addAudit('Exported users CSV'); }}>⬇ Users CSV</button>
-            <button style={styles.btnExport} onClick={() => { if (!allScans.length) { showToast('No scans loaded yet', true); return; } downloadCSV('woodapp-scans.csv', [['User Email','Scanned At','Entries','Total Volume (ft³)','Measurements'], ...allScans.map(s => [s.user_email,new Date(s.scanned_at).toLocaleString(),s.entries.length,s.total_volume.toFixed(3),s.entries.map(e=>`${e.a_raw}x${e.b_raw}`).join(' | ')])]); showToast('Scans CSV downloaded'); addAudit('Exported scans CSV'); }}>⬇ Scans CSV</button>
+          <div style={styles.headerActions}>
+            <button style={styles.secondaryBtn} onClick={() => navigate('/')}>Calculator</button>
+            <button style={styles.secondaryBtn} onClick={() => loadDashboard(apiBase, adminKey, paymentFilter)} disabled={loading}>
+              Refresh
+            </button>
+            <button style={styles.secondaryBtn} onClick={() => setLoggedIn(false)}>Sign out</button>
           </div>
-        </div>
+        </header>
 
-        {/* Expiry banner */}
-        {expiringSoon.length > 0 && (
-          <div style={{ background: '#1e1005', border: '1px solid #c47a1a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#e8a742', fontSize: 13 }}>
-            ⚠️ <strong style={{ color: '#f5c842' }}>{expiringSoon.length} subscription{expiringSoon.length > 1 ? 's' : ''} expiring within 7 days:</strong>{' '}
-            {expiringSoon.slice(0,5).map(u => u.email).join(', ')}{expiringSoon.length > 5 ? ` +${expiringSoon.length-5} more` : ''}
-          </div>
-        )}
+        {notice && <div style={notice.includes('Activated') || notice.includes('approved') || notice.includes('rejected') ? styles.okBox : styles.errorBox}>{notice}</div>}
 
-        {/* Stats */}
-        <div style={styles.statsGrid}>
-          {[
-            { label: 'Total Users',    value: allUsers.length, sub: 'Registered accounts', color: '#c084fc' },
-            { label: 'Active Subs',    value: active.length,   sub: 'Paying customers',    color: '#c084fc' },
-            { label: 'Expiring Soon',  value: expiringSoon.length, sub: 'Within 7 days',  color: '#f5a623' },
-            { label: 'Expired',        value: expired.length,  sub: 'Need renewal',        color: '#c084fc' },
-            { label: 'Total Scans',    value: allScans.length, sub: 'All time',            color: '#c084fc' },
-          ].map(s => (
-            <div key={s.label} style={styles.statCard}>
-              <div style={{ color: '#5b3a7a', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '.04em' }}>{s.label}</div>
-              <div style={{ color: s.color, fontSize: 30, fontWeight: 800 }}>{s.value}</div>
-              <div style={{ color: '#6abf50', fontSize: 12, marginTop: 5 }}>{s.sub}</div>
-            </div>
+        <section style={styles.statsGrid}>
+          {stats.map(item => (
+            <article key={item.label} style={styles.statCard}>
+              <span style={styles.statLabel}>{item.label}</span>
+              <strong style={styles.statValue}>{item.value}</strong>
+              <span style={styles.statNote}>{item.note}</span>
+            </article>
           ))}
-          <div style={styles.statCard}>
-            <div style={{ color: '#5b3a7a', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '.04em' }}>Est. Revenue / mo</div>
-            <div style={{ color: '#a78bfa', fontSize: 24, fontWeight: 800 }}>${revenue.toFixed(2)}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-              <span style={{ color: '#5b3a7a', fontSize: 11 }}>$/user</span>
-              <input style={{ ...styles.input, width: 70, padding: '4px 6px', fontSize: 12 }} type="number" value={revenuePrice} min="0" step="0.01" onChange={e => setRevenuePrice(e.target.value)} />
+        </section>
+
+        <section style={styles.workGrid}>
+          <article style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <h2 style={styles.panelTitle}>Activate Subscription</h2>
+            </div>
+            <div style={styles.formRow}>
+              <input
+                style={styles.input}
+                type="email"
+                value={activateEmail}
+                onChange={event => setActivateEmail(event.target.value)}
+                placeholder="user@email.com"
+              />
+              <input
+                style={{ ...styles.input, flex: '0 1 110px' }}
+                type="number"
+                min="1"
+                value={activateDays}
+                onChange={event => setActivateDays(event.target.value)}
+                placeholder="Days"
+              />
+              <button style={styles.primaryBtn} onClick={() => activateUser()} disabled={loading}>
+                Activate
+              </button>
+            </div>
+          </article>
+
+          <article style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <h2 style={styles.panelTitle}>UTR Payments</h2>
+              <select
+                style={styles.select}
+                value={paymentFilter}
+                onChange={event => {
+                  setPaymentFilter(event.target.value);
+                  loadDashboard(apiBase, adminKey, event.target.value);
+                }}
+              >
+                <option value="submitted">Submitted</option>
+                <option value="created">Created</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <div style={styles.listStack}>
+              {payments.slice(0, 5).map(payment => (
+                <div key={payment.id} style={styles.paymentRow}>
+                  <div style={styles.rowMain}>
+                    <strong style={styles.rowTitle}>{payment.email || '-'}</strong>
+                    <span style={styles.rowMeta}>
+                      {payment.amountLabel || '-'} | UTR {payment.utr || 'not submitted'} | {String(payment.status || '-').toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={styles.rowActions}>
+                    <button
+                      style={styles.smallBtn}
+                      disabled={loading || !payment.utr || payment.status === 'approved'}
+                      onClick={() => updatePayment(payment, 'approve')}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      style={styles.dangerBtn}
+                      disabled={loading || payment.status === 'approved' || payment.status === 'rejected'}
+                      onClick={() => updatePayment(payment, 'reject')}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {payments.length === 0 && <p style={styles.emptyText}>No payment requests in this filter.</p>}
+            </div>
+          </article>
+        </section>
+
+        <section style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <h2 style={styles.panelTitle}>Users</h2>
+            <div style={styles.panelTools}>
+              <input
+                style={{ ...styles.input, width: 230 }}
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Search email"
+              />
+              <button style={styles.secondaryBtn} onClick={exportUsers}>Export CSV</button>
             </div>
           </div>
-        </div>
-
-        {/* Charts row 1 */}
-        <div style={styles.chartsGrid}>
-          <div style={styles.chartCard}>
-            <h2 style={{ color: '#c084fc', fontSize: 15, marginBottom: 15 }}>📈 Scan Trend (last 14 days)</h2>
-            <canvas ref={scanChartRef} style={{ maxHeight: 200 }} />
-          </div>
-          <div style={styles.chartCard}>
-            <h2 style={{ color: '#c084fc', fontSize: 15, marginBottom: 15 }}>📊 Subscriptions by Join Date</h2>
-            <canvas ref={subsChartRef} style={{ maxHeight: 200 }} />
-          </div>
-        </div>
-
-        {/* Revenue chart */}
-        <div style={styles.chartCard}>
-          <h2 style={{ color: '#c084fc', fontSize: 15, marginBottom: 15 }}>💰 Monthly Revenue Trend (last 30 days)</h2>
-          <canvas ref={revChartRef} style={{ maxHeight: 200 }} />
-        </div>
-
-        {/* Quick Activate + Scan Limit */}
-        <div style={styles.tableWrap}>
-          <div style={{ color: '#c084fc', fontSize: 18, marginBottom: 12 }}>⚡ Quick Activate</div>
-          <div style={styles.formInline}>
-            <input style={styles.formInput} type="email" placeholder="User email" value={actEmail} onChange={e => setActEmail(e.target.value)} />
-            <input style={styles.formInput} type="number" placeholder="Days (default 30)" value={actDays} onChange={e => setActDays(e.target.value)} />
-            <button style={styles.formBtn} onClick={activateUser}>Activate Subscription</button>
-          </div>
-          <div style={{ color: '#c084fc', fontSize: 15, margin: '8px 0 4px' }}>🎛 Scan Limit Override</div>
-          <p style={{ color: '#5b3a7a', fontSize: 11, marginBottom: 8 }}>Requires a /api/admin/set-limit endpoint in your backend.</p>
-          <div style={styles.formInline}>
-            <input style={styles.formInput} type="email" placeholder="User email" value={limitEmail} onChange={e => setLimitEmail(e.target.value)} />
-            <input style={styles.formInput} type="number" placeholder="New daily scan limit" value={limitVal} min="1" onChange={e => setLimitVal(e.target.value)} />
-            <button style={styles.formBtn} onClick={setScanLimit}>Set Limit</button>
-          </div>
-        </div>
-
-        {/* Users table */}
-        <div style={styles.tableWrap}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-            <h2 style={{ color: '#c084fc', fontSize: 18 }}>👥 All Users</h2>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ color: '#3d2060', fontSize: 12 }}>{lastUserUpdate}</span>
-              <button style={styles.btnSm} onClick={loadUsers}>🔄 Refresh</button>
-            </div>
-          </div>
-
-          <input style={{ ...styles.formInput, width: '100%', marginBottom: 10 }} type="text" placeholder="🔍 Search by email or status…" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
-
-          {/* Bulk bar */}
-          {selected.size > 0 && (
-            <div style={{ background: '#1a0e2e', border: '1px solid #4a2575', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ color: '#a855f7', fontSize: 13, fontWeight: 600 }}>{selected.size} selected</span>
-              <button style={styles.formBtn} onClick={bulkExtend}>Extend 30 days</button>
-              <button style={{ ...styles.formBtn, background: '#7a1010' }} onClick={() => { setModal({ title: 'Bulk Delete', body: `Delete ${selected.size} user(s)? This cannot be undone.`, onConfirm: () => { addAudit('Bulk delete: endpoint needed in backend'); showToast('Bulk delete: endpoint needed in backend'); setSelected(new Set()); setModal(null); } }); }}>Delete Selected</button>
-              <button style={{ ...styles.formBtn, background: '#2a1a4e', border: '1px solid #3b1f5e' }} onClick={() => setSelected(new Set())}>Clear</button>
-            </div>
-          )}
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
               <thead>
-                <tr style={{ background: '#12092a' }}>
-                  <Th noSort><input type="checkbox" style={{ accentColor: '#7c3aed' }} onChange={e => { const emails = pageSlice.map(u => u.email); if (e.target.checked) setSelected(prev => new Set([...prev, ...emails])); else setSelected(prev => { const next = new Set(prev); emails.forEach(em => next.delete(em)); return next; }); }} /></Th>
-                  {[['id','ID'],['email','Email'],['status','Status'],['daysLeft','Days Left'],['scansUsed','Scans Today'],['createdAt','Created']].map(([col, label]) => (
-                    <Th key={col} onClick={() => sortBy(col)} sort={sortCol===col ? sortDir : null}>{label}</Th>
-                  ))}
-                  <Th noSort>Actions</Th>
+                <tr>
+                  <Th>Email</Th>
+                  <Th>Status</Th>
+                  <Th>Days</Th>
+                  <Th>Scans</Th>
+                  <Th>Joined</Th>
+                  <Th>Action</Th>
                 </tr>
               </thead>
               <tbody>
-                {pageSlice.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', color: '#5b3a7a', padding: 20 }}>No users found</td></tr>
-                ) : pageSlice.map(u => {
-                  const expiring = u.subscription.active && u.subscription.daysLeft > 0 && u.subscription.daysLeft <= 7;
+                {filteredUsers.slice(0, 50).map(user => {
+                  const status = userStatus(user);
+                  const counts = scanCount(user);
                   return (
-                    <tr key={u.id} style={{ background: expiring ? '#1a1005' : undefined }}>
-                      <Td><input type="checkbox" checked={selected.has(u.email)} style={{ accentColor: '#7c3aed' }} onChange={e => { setSelected(prev => { const next = new Set(prev); e.target.checked ? next.add(u.email) : next.delete(u.email); return next; }); }} /></Td>
-                      <Td>{u.id}</Td>
-                      <Td>{u.email}</Td>
-                      <Td style={{ color: u.subscription.active ? '#6abf50' : u.subscription.reason==='expired' ? '#ff7070' : '#5b3a7a', fontWeight: 600 }}>{u.subscription.reason.toUpperCase()}</Td>
-                      <Td style={expiring ? { color: '#f5a623', fontWeight: 700 } : {}}>{u.subscription.daysLeft}</Td>
-                      <Td>{u.scans.used} / {u.scans.limit}</Td>
-                      <Td>{new Date(u.createdAt).toLocaleDateString()}</Td>
+                    <tr key={user.id || user.email}>
+                      <Td strong>{user.email}</Td>
                       <Td>
-                        <button style={styles.actionBtn} onClick={() => setUserModal(u)}>View</button>
-                        <button style={styles.actionBtn} onClick={() => { setActEmail(u.email); setActDays('30'); window.scrollTo({top:0,behavior:'smooth'}); addAudit(`Opened extend form for ${u.email}`); }}>Extend</button>
-                        <button style={{ ...styles.actionBtn, color: '#ff7070' }} onClick={() => { setModal({ title: 'Delete User', body: `Delete ${u.email}? Cannot be undone.`, onConfirm: () => { addAudit(`Delete attempted: ${u.email} (endpoint needed in backend)`); showToast(`Delete user ${u.email} - endpoint needed in backend`); setModal(null); } }); }}>Delete</button>
+                        <span style={status.active ? styles.goodPill : styles.warnPill}>
+                          {status.reason}
+                        </span>
+                      </Td>
+                      <Td>{status.daysLeft}</Td>
+                      <Td>{counts.used} / {counts.limit}</Td>
+                      <Td>{formatDate(user.createdAt)}</Td>
+                      <Td>
+                        <button style={styles.smallBtn} onClick={() => activateUser(user.email, 30)} disabled={loading}>
+                          +30 days
+                        </button>
                       </Td>
                     </tr>
                   );
                 })}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={styles.emptyCell}>No users found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
+        </section>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, fontSize: 13, color: '#5b3a7a' }}>
-            <button style={styles.btnSm} onClick={() => setPage(p => Math.max(0, p-1))} disabled={saferPage === 0}>← Prev</button>
-            <span>Page {saferPage+1} of {totalPages}</span>
-            <button style={styles.btnSm} onClick={() => setPage(p => Math.min(totalPages-1, p+1))} disabled={saferPage >= totalPages-1}>Next →</button>
+        <section style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <h2 style={styles.panelTitle}>Recent Scans</h2>
           </div>
-        </div>
-
-        {/* Leaderboard */}
-        <div style={styles.tableWrap}>
-          <h2 style={{ color: '#c084fc', fontSize: 18, marginBottom: 12 }}>🏆 Top Users by Scans</h2>
-          {leaderboard.length === 0 ? (
-            <p style={{ color: '#3d2060', fontSize: 12, textAlign: 'center', padding: 10 }}>No data yet</p>
-          ) : leaderboard.map(([email, count], i) => (
-            <div key={email} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: i > 0 ? '1px solid #1e0f35' : undefined, fontSize: 13 }}>
-              <span style={{ color: '#5b3a7a', fontSize: 11, width: 22, textAlign: 'right', flexShrink: 0 }}>{i+1}.</span>
-              <span style={{ color: '#e8d8f5', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
-              <div style={{ flex: 1, background: '#1e0f35', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                <div style={{ background: '#7c3aed', height: 6, borderRadius: 4, width: `${Math.round(count/lbMax*100)}%`, transition: 'width .4s' }} />
-              </div>
-              <span style={{ color: '#c084fc', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{count}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Recent scans */}
-        <div style={styles.tableWrap}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-            <h2 style={{ color: '#c084fc', fontSize: 18 }}>📋 Recent Scans</h2>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ color: '#3d2060', fontSize: 12 }}>{lastScanUpdate}</span>
-              <button style={styles.btnSm} onClick={loadScans}>🔄 Refresh</button>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-            <span style={{ color: '#5b3a7a', fontSize: 12 }}>From</span>
-            <input type="date" style={{ ...styles.formInput, padding: '7px 10px', fontSize: 12 }} value={scanFrom} onChange={e => setScanFrom(e.target.value)} />
-            <span style={{ color: '#5b3a7a', fontSize: 12 }}>To</span>
-            <input type="date" style={{ ...styles.formInput, padding: '7px 10px', fontSize: 12 }} value={scanTo} onChange={e => setScanTo(e.target.value)} />
-            <button style={styles.btnSm} onClick={() => { setScanFrom(''); setScanTo(''); }}>Clear</button>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ background: '#12092a' }}>
-                {['User','Date','Entries','Total Volume','Measurements'].map(h => <Th key={h} noSort>{h}</Th>)}
-              </tr></thead>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <Th>User</Th>
+                  <Th>Date</Th>
+                  <Th>Entries</Th>
+                  <Th>Total Volume</Th>
+                </tr>
+              </thead>
               <tbody>
-                {filteredScans.length === 0 ? (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#5b3a7a', padding: 12 }}>No scans found</td></tr>
-                ) : filteredScans.map((s, i) => (
-                  <tr key={i}>
-                    <Td>{s.user_email}</Td>
-                    <Td>{new Date(s.scanned_at).toLocaleString()}</Td>
-                    <Td>{s.entries.length}</Td>
-                    <Td>{s.total_volume.toFixed(3)} ft³</Td>
-                    <Td style={{ color: '#5b3a7a', fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.entries.map(e => `${e.a_raw}×${e.b_raw}`).join(', ')}
-                    </Td>
+                {scans.slice(0, 25).map(scan => (
+                  <tr key={scan.id || `${scan.user_email}-${scan.scanned_at}`}>
+                    <Td strong>{scan.user_email}</Td>
+                    <Td>{formatDate(scan.scanned_at)}</Td>
+                    <Td>{Array.isArray(scan.entries) ? scan.entries.length : 0}</Td>
+                    <Td>{formatVolume(scan.total_volume)}</Td>
                   </tr>
                 ))}
+                {scans.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={styles.emptyCell}>No scan history found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Audit log */}
-        <div style={styles.tableWrap}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ color: '#c084fc', fontSize: 18 }}>📝 Session Audit Log</h2>
-            <button style={styles.btnSm} onClick={() => setAuditLog([])}>Clear</button>
-          </div>
-          <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 12 }}>
-            {auditLog.length === 0 ? (
-              <p style={{ color: '#3d2060', textAlign: 'center', padding: 10 }}>No actions yet this session</p>
-            ) : auditLog.map((e, i) => (
-              <div key={i} style={{ padding: '6px 0', borderTop: i > 0 ? '1px solid #1e0f35' : undefined, display: 'flex', gap: 10 }}>
-                <span style={{ color: '#3d2060', whiteSpace: 'nowrap', flexShrink: 0 }}>{e.time}</span>
-                <span style={{ color: '#c8b0e8' }}>{e.msg}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>{/* /container */}
-
-      {/* Confirm Modal */}
-      {modal && (
-        <div style={styles.modalOverlay} onClick={e => { if (e.target === e.currentTarget) setModal(null); }}>
-          <div style={styles.modalContent}>
-            <h3 style={{ color: '#c084fc', marginBottom: 15 }}>{modal.title}</h3>
-            <p style={{ color: '#a855f7', lineHeight: 1.8, marginBottom: 15 }}>{modal.body}</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={{ ...styles.formBtn, background: '#1a0e2e', color: '#a855f7', border: '1px solid #3b1f5e' }} onClick={() => setModal(null)}>Cancel</button>
-              <button style={styles.formBtn} onClick={modal.onConfirm}>Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* User Detail Modal */}
-      {userModal && (
-        <div style={styles.modalOverlay} onClick={e => { if (e.target === e.currentTarget) { setUserModal(null); } }}>
-          <div style={{ ...styles.modalContent, maxWidth: 740, maxHeight: '88vh', overflowY: 'auto', position: 'relative' }}>
-            <button style={{ position: 'absolute', top: 18, right: 18, background: 'none', border: 'none', color: '#a855f7', fontSize: 20, cursor: 'pointer' }} onClick={() => setUserModal(null)}>✕</button>
-            <h3 style={{ color: '#c084fc', fontSize: 18, marginBottom: 5, paddingRight: 32 }}>{userModal.email}</h3>
-            <p style={{ color: '#5b3a7a', fontSize: 12, marginBottom: 16 }}>ID: {userModal.id} · Joined: {new Date(userModal.createdAt).toLocaleDateString()}</p>
-
-            <div style={{ marginBottom: 18 }}>
-              <h4 style={{ color: '#a855f7', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>Account Info</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '5px 10px', fontSize: 13 }}>
-                <span style={{ color: '#5b3a7a' }}>Status</span>   <span style={{ color: userModal.subscription.active ? '#6abf50' : '#ff7070', fontWeight: 600 }}>{userModal.subscription.reason.toUpperCase()}</span>
-                <span style={{ color: '#5b3a7a' }}>Days Left</span> <span style={{ color: '#e8d8f5' }}>{userModal.subscription.daysLeft}</span>
-                <span style={{ color: '#5b3a7a' }}>Scans Today</span> <span style={{ color: '#e8d8f5' }}>{userModal.scans.used} / {userModal.scans.limit}</span>
-                <span style={{ color: '#5b3a7a' }}>Sub Active</span> <span style={{ color: '#e8d8f5' }}>{userModal.subscription.active ? '✅ Yes' : '❌ No'}</span>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 18 }}>
-              <h4 style={{ color: '#a855f7', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>Scan Volume Over Time</h4>
-              <div style={{ background: '#100820', borderRadius: 8, padding: 14 }}>
-                <canvas ref={userChartRef} style={{ maxHeight: 160 }} />
-              </div>
-            </div>
-
-            <div>
-              <h4 style={{ color: '#a855f7', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>Scan History</h4>
-              {allScans.filter(s => s.user_email === userModal.email).length === 0 ? (
-                <p style={{ color: '#3d2060', textAlign: 'center', padding: 16 }}>No scans recorded yet.</p>
-              ) : allScans.filter(s => s.user_email === userModal.email).map((s, i) => (
-                <div key={i} style={{ background: '#100820', borderRadius: 8, padding: '10px 12px', marginBottom: 8, fontSize: 12 }}>
-                  <div style={{ color: '#c084fc', fontWeight: 600, marginBottom: 4 }}>{new Date(s.scanned_at).toLocaleString()}</div>
-                  <div style={{ color: '#7a5a9a', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    <span>Entries: {s.entries.length}</span>
-                    <span>Volume: {s.total_volume.toFixed(3)} ft³</span>
-                  </div>
-                  <div style={{ color: '#5b3a7a', marginTop: 4, fontSize: 11, wordBreak: 'break-all' }}>
-                    {s.entries.map(e => `${e.a_raw}×${e.b_raw}`).join(', ')}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      <div style={{ position: 'fixed', bottom: 20, right: 20, background: toast.err ? '#3a0a0a' : '#1a0e3a', color: toast.err ? '#ff7070' : '#6abf50', padding: '14px 20px', borderRadius: 10, fontSize: 14, fontWeight: 600, transform: toast.show ? 'translateY(0)' : 'translateY(100px)', transition: 'transform .3s', zIndex: 1200 }}>
-        {toast.msg}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
-/* ── Small table components ── */
-function Th({ children, noSort, sort, onClick, style }) {
-  return (
-    <th onClick={noSort ? undefined : onClick} style={{ padding: '11px 10px', color: '#a855f7', textAlign: 'left', fontWeight: 600, cursor: noSort ? 'default' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', borderBottom: '1px solid #1e0f35', ...style }}>
-      {children}{sort === 'asc' ? ' ▲' : sort === 'desc' ? ' ▼' : ''}
-    </th>
-  );
-}
-function Td({ children, style }) {
-  return <td style={{ padding: 10, borderTop: '1px solid #1e0f35', verticalAlign: 'middle', ...style }}>{children}</td>;
+function Th({ children }) {
+  return <th style={styles.th}>{children}</th>;
 }
 
-/* ── Inline styles ── */
+function Td({ children, strong }) {
+  return <td style={strong ? { ...styles.td, ...styles.tdStrong } : styles.td}>{children}</td>;
+}
+
 const styles = {
-  container: { maxWidth: 1200, margin: '0 auto', padding: 20 },
-  header:    { background: '#160d24', border: 'none', borderBottom: '2px solid #7c3aed', padding: 20, marginBottom: 20, borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 15, marginBottom: 20 },
-  statCard:  { background: '#160d24', borderRadius: 12, padding: 20, border: '1px solid #3b1f5e' },
-  chartsGrid:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 20 },
-  chartCard: { background: '#160d24', borderRadius: 12, padding: 20, border: '1px solid #3b1f5e', marginBottom: 20 },
-  tableWrap: { background: '#160d24', borderRadius: 12, padding: 20, marginBottom: 20, border: '1px solid #3b1f5e' },
-  input:     { background: '#0e0819', border: '1.5px solid #4a2575', borderRadius: 10, padding: 14, color: '#e8d8f5', fontSize: 15, marginBottom: 12, outline: 'none', width: '100%' },
-  loginBox:  { maxWidth: 400, width: '90%', background: '#160d24', borderRadius: 12, padding: 30, border: '1px solid #3b1f5e' },
-  loginBtn:  { width: '100%', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 12, padding: 15, fontSize: 16, fontWeight: 700, cursor: 'pointer' },
-  formInline:{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' },
-  formInput: { flex: 1, minWidth: 150, background: '#0e0819', border: '1.5px solid #4a2575', borderRadius: 8, padding: 10, color: '#e8d8f5', fontSize: 13, outline: 'none' },
-  formBtn:   { background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
-  btnSm:     { background: '#1a0e2e', color: '#a855f7', border: '1px solid #3b1f5e', borderRadius: 8, padding: '7px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' },
-  btnExport: { background: '#1a0e2e', color: '#6abf50', border: '1px solid #2a4020', borderRadius: 8, padding: '7px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' },
-  actionBtn: { background: 'none', border: 'none', color: '#a855f7', cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: '2px 3px', marginRight: 2 },
-  modalOverlay: { display: 'flex', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1001, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modalContent:  { background: '#160d24', borderRadius: 12, padding: 25, maxWidth: 500, width: '100%', border: '2px solid #7c3aed' },
+  page: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 50,
+    width: '100vw',
+    minWidth: 0,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    background: '#f4efe5',
+    color: '#1c211a',
+    fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
+  },
+  shell: {
+    width: 'min(1180px, 100%)',
+    minWidth: 0,
+    margin: '0 auto',
+    padding: 'clamp(14px, 3vw, 26px)',
+  },
+  loginPanel: {
+    width: 'min(420px, calc(100% - 28px))',
+    margin: 'min(12vh, 80px) auto',
+    padding: '28px clamp(18px, 5vw, 30px)',
+    border: '1px solid rgba(28, 33, 26, 0.16)',
+    borderRadius: 8,
+    background: '#fffaf0',
+    boxShadow: '0 20px 60px rgba(28, 33, 26, 0.16)',
+  },
+  brandMark: {
+    width: 42,
+    height: 42,
+    display: 'grid',
+    placeItems: 'center',
+    marginBottom: 14,
+    border: '2px solid #1c211a',
+    background: '#315f48',
+    color: '#fffaf0',
+    fontWeight: 900,
+  },
+  loginTitle: { margin: 0, fontSize: 30, lineHeight: 1, letterSpacing: 0 },
+  loginCopy: { margin: '10px 0 22px', color: '#5e6758', lineHeight: 1.45 },
+  loginForm: { display: 'grid', gap: 13 },
+  fieldLabel: { display: 'grid', gap: 6, color: '#394235', fontSize: 13, fontWeight: 800 },
+  input: {
+    minWidth: 0,
+    minHeight: 42,
+    flex: '1 1 180px',
+    padding: '10px 12px',
+    border: '1px solid rgba(49, 95, 72, 0.28)',
+    borderRadius: 6,
+    background: '#fffdf7',
+    color: '#1c211a',
+    outline: 'none',
+    fontSize: 14,
+  },
+  select: {
+    minHeight: 38,
+    padding: '8px 10px',
+    border: '1px solid rgba(49, 95, 72, 0.28)',
+    borderRadius: 6,
+    background: '#fffdf7',
+    color: '#1c211a',
+    fontSize: 14,
+  },
+  primaryBtn: {
+    minHeight: 42,
+    padding: '10px 15px',
+    border: 0,
+    borderRadius: 6,
+    background: '#315f48',
+    color: '#fffaf0',
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  secondaryBtn: {
+    minHeight: 38,
+    padding: '8px 12px',
+    border: '1px solid rgba(49, 95, 72, 0.28)',
+    borderRadius: 6,
+    background: '#fffaf0',
+    color: '#315f48',
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  linkBtn: {
+    border: 0,
+    background: 'transparent',
+    color: '#315f48',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+  smallBtn: {
+    minHeight: 32,
+    padding: '7px 10px',
+    border: '1px solid rgba(49, 95, 72, 0.28)',
+    borderRadius: 6,
+    background: '#e8f0e2',
+    color: '#315f48',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  dangerBtn: {
+    minHeight: 32,
+    padding: '7px 10px',
+    border: '1px solid rgba(152, 58, 42, 0.25)',
+    borderRadius: 6,
+    background: '#f4ddd6',
+    color: '#983a2a',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  kicker: { margin: '0 0 4px', color: '#315f48', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' },
+  title: { margin: 0, fontSize: 'clamp(28px, 5vw, 44px)', lineHeight: 1, letterSpacing: 0 },
+  subtitle: { margin: '8px 0 0', color: '#667160', fontSize: 14 },
+  headerActions: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
+    gap: 10,
+    marginBottom: 14,
+  },
+  statCard: {
+    minWidth: 0,
+    padding: 16,
+    border: '1px solid rgba(28, 33, 26, 0.14)',
+    borderRadius: 8,
+    background: '#fffaf0',
+  },
+  statLabel: { display: 'block', color: '#667160', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' },
+  statValue: { display: 'block', marginTop: 7, color: '#1c211a', fontSize: 30, lineHeight: 1 },
+  statNote: { display: 'block', marginTop: 5, color: '#315f48', fontSize: 12, fontWeight: 700 },
+  workGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
+    gap: 14,
+    marginBottom: 14,
+  },
+  panel: {
+    minWidth: 0,
+    marginBottom: 14,
+    padding: 16,
+    border: '1px solid rgba(28, 33, 26, 0.14)',
+    borderRadius: 8,
+    background: '#fffaf0',
+  },
+  panelHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  panelTitle: { margin: 0, fontSize: 18, letterSpacing: 0 },
+  panelTools: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  formRow: { display: 'flex', alignItems: 'stretch', gap: 8, flexWrap: 'wrap' },
+  listStack: { display: 'grid', gap: 8 },
+  paymentRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    padding: 10,
+    border: '1px solid rgba(28, 33, 26, 0.1)',
+    borderRadius: 6,
+    background: '#f8f2e7',
+  },
+  rowMain: { minWidth: 0, display: 'grid', gap: 3 },
+  rowTitle: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  rowMeta: { color: '#667160', fontSize: 12, overflowWrap: 'anywhere' },
+  rowActions: { display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  tableWrap: { maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' },
+  table: { width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13 },
+  th: {
+    padding: '10px 9px',
+    borderBottom: '1px solid rgba(28, 33, 26, 0.18)',
+    color: '#667160',
+    textAlign: 'left',
+    fontSize: 11,
+    fontWeight: 900,
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+  },
+  td: {
+    padding: '11px 9px',
+    borderTop: '1px solid rgba(28, 33, 26, 0.08)',
+    color: '#394235',
+    verticalAlign: 'middle',
+  },
+  tdStrong: { color: '#1c211a', fontWeight: 800 },
+  goodPill: {
+    display: 'inline-flex',
+    padding: '4px 8px',
+    borderRadius: 999,
+    background: '#dcebdd',
+    color: '#315f48',
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  warnPill: {
+    display: 'inline-flex',
+    padding: '4px 8px',
+    borderRadius: 999,
+    background: '#f0dfbf',
+    color: '#7b551e',
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  emptyText: { margin: 0, padding: 12, color: '#667160', textAlign: 'center' },
+  emptyCell: { padding: 20, color: '#667160', textAlign: 'center' },
+  errorBox: {
+    padding: '10px 12px',
+    border: '1px solid rgba(152, 58, 42, 0.25)',
+    borderRadius: 6,
+    background: '#f4ddd6',
+    color: '#733024',
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  okBox: {
+    padding: '10px 12px',
+    border: '1px solid rgba(49, 95, 72, 0.25)',
+    borderRadius: 6,
+    background: '#dcebdd',
+    color: '#315f48',
+    fontSize: 13,
+    lineHeight: 1.45,
+    marginBottom: 14,
+  },
 };

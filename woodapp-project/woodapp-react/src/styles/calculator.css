@@ -419,6 +419,14 @@ header h1 {
   padding: 28px 22px;
 }
 
+.auth-screen,
+.sub-screen {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .auth-hero,
 .sub-hero,
 .history-header {
@@ -1448,6 +1456,65 @@ header h1 {
   font-size: 9px;
 }
 
+.mobile-entry-list {
+  display: none;
+}
+
+.mobile-entry-card {
+  border: 1px solid var(--border-strong);
+  border-left: 5px solid var(--moss);
+  border-radius: var(--radius-card);
+  background: rgba(255, 250, 240, 0.48);
+  box-shadow: 5px 5px 0 rgba(58, 51, 40, 0.08);
+  padding: 12px;
+}
+
+.mobile-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-hair);
+}
+
+.mobile-entry-head span {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  padding-top: 10px;
+}
+
+.mobile-entry-grid div {
+  min-width: 0;
+}
+
+.mobile-entry-grid span,
+.mobile-entry-grid small {
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mobile-entry-grid strong {
+  display: block;
+  margin: 3px 0 2px;
+  color: var(--moss-dark);
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .total-bar {
   position: sticky;
   bottom: 0;
@@ -1887,6 +1954,55 @@ header h1 {
 
   .utr-form .btn-primary {
     width: 100%;
+  }
+}
+
+@media (max-width: 560px), (max-height: 720px) {
+  .auth-screen,
+  .sub-screen {
+    justify-content: flex-start;
+    padding: 22px 18px 26px;
+  }
+
+  .auth-card,
+  .upi-card {
+    padding: 16px;
+  }
+
+  .auth-hero h2,
+  .sub-hero h2 {
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 560px) {
+  .results-screen {
+    overflow-x: hidden;
+  }
+
+  .table-container {
+    display: none;
+  }
+
+  .mobile-entry-list {
+    display: grid;
+    gap: 10px;
+    margin: 12px 12px 0;
+  }
+
+  .mobile-entry-head .rm-btn {
+    min-height: 34px;
+    padding: 7px 9px;
+  }
+
+  .total-bar {
+    position: static;
+    margin-top: 12px;
+    padding: 13px 14px;
+  }
+
+  .total-value {
+    font-size: 29px;
   }
 }
 

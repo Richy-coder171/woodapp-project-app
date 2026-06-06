@@ -152,3 +152,7 @@ The Android app uses the native Google account picker. If Android shows `Google 
 cd D:\woodapp-project\woodapp-project\woodapp-react
 npm run network:update
 npm run android:refresh-network
+
+
+
+Now deploy it to the web throught the render or the railway.com

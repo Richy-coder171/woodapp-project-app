@@ -2,6 +2,7 @@ import { LOCAL_NETWORK } from './localNetwork';
 
 const LOCAL_HOSTS = new Set(['', 'localhost', '127.0.0.1', '::1']);
 const PRIVATE_IPV4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+const DEPLOYED_API_ORIGIN = String(import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
 
 function getRuntimeServerIp() {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -16,8 +17,16 @@ function getRuntimeServerIp() {
 
 export const SERVER_IP = getRuntimeServerIp();
 export const SERVER_PORT = String(LOCAL_NETWORK.serverPort || '3001');
-export const API_ORIGIN = `http://${SERVER_IP}:${SERVER_PORT}`;
+export const API_ORIGIN = DEPLOYED_API_ORIGIN || `http://${SERVER_IP}:${SERVER_PORT}`;
 export const API_BASE = `${API_ORIGIN}/api`;
+
+function getConnectionHelp() {
+  if (DEPLOYED_API_ORIGIN) {
+    return `Configured API: ${API_ORIGIN}`;
+  }
+
+  return `Make sure:\n1. Backend is running (node server.js)\n2. Your PC IP is ${SERVER_IP}\n3. Phone and PC are on the same WiFi\n4. Windows Firewall allows port ${SERVER_PORT}`;
+}
 
 export async function checkServerConnection() {
   try {
@@ -39,13 +48,13 @@ export async function checkServerConnection() {
     if (err.name === 'AbortError') {
       return {
         connected: false,
-        error: `Connection timed out. Make sure:\n1. Backend is running (node server.js)\n2. Your PC IP is ${SERVER_IP}\n3. Phone and PC are on the same WiFi`,
+        error: `Connection timed out. ${getConnectionHelp()}`,
       };
     }
 
     return {
       connected: false,
-      error: `Cannot reach server: ${err.message}\n\nMake sure:\n1. Backend is running (node server.js)\n2. Your PC IP is ${SERVER_IP}\n3. Phone and PC are on the same WiFi\n4. Windows Firewall allows port ${SERVER_PORT}`,
+      error: `Cannot reach server: ${err.message}\n\n${getConnectionHelp()}`,
     };
   }
 }

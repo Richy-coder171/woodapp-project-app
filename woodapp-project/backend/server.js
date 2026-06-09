@@ -6,6 +6,8 @@ const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 const cors = require('cors');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,6 +16,7 @@ const ADMIN_KEY = process.env.ADMIN_KEY || 'your-admin-secret-key-here';
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_KEY = process.env.GROQ_API_KEY || '';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'woodapp.db');
 
 const readPositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
@@ -50,7 +53,8 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
-const db = new sqlite3.Database('./woodapp.db');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+const db = new sqlite3.Database(DB_PATH);
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (

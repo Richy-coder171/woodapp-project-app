@@ -2,6 +2,8 @@
 
 Use this whenever your WiFi, hotspot, or PC network changes and the mobile app cannot reach the backend.
 
+For public internet deployment, use [DEPLOYMENT.md](DEPLOYMENT.md). This makes the app work from any network using a hosted HTTPS backend.
+
 ## What Changed
 
 - The app no longer keeps the backend IP directly inside the main config file.

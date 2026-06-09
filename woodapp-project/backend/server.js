@@ -40,8 +40,8 @@ if (!GEMINI_KEY && !GROQ_KEY) {
   console.error('  GROQ_API_KEY   → https://console.groq.com/keys (free)');
   process.exit(1);
 }
-if (GEMINI_KEY) console.log('Gemini API Key loaded:', GEMINI_KEY.substring(0, 10) + '...');
-if (GROQ_KEY) console.log('Groq API Key loaded:', GROQ_KEY.substring(0, 10) + '...');
+if (GEMINI_KEY) console.log('Gemini API configured');
+if (GROQ_KEY) console.log('Groq API configured');
 
 const DAILY_SCAN_LIMIT = 200;
 

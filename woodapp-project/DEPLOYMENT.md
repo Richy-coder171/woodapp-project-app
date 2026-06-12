@@ -80,11 +80,17 @@ Then rebuild:
 
 ```powershell
 cd D:\woodapp-project\woodapp-project\woodapp-react
-npm run build
-npm run android:sync
+npm run android:apk
 ```
 
-The rebuilt APK will use the public backend from any network.
+The rebuilt installable APK will be at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Production builds also read the tracked `.env.production` file, so the APK uses
+the public backend from any network even when the local `.env` file is missing.
 
 ## Production Notes
 

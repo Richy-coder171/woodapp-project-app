@@ -8,6 +8,7 @@
     "android:fix-java": "powershell -ExecutionPolicy Bypass -File ../scripts/fix-android-java.ps1",
     "android:sync": "npx cap sync android && npm run android:fix-java",
     "android:refresh-network": "npm run network:update && npm run build && npm run android:sync",
+    "android:apk": "npm run build && npm run android:sync && cd android && gradlew.bat assembleDebug",
     "build": "vite build",
     "preview": "vite preview",
     "cap:add:android": "npx cap add android",

@@ -17,6 +17,9 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_KEY = process.env.GROQ_API_KEY || '';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'woodapp.db');
+const IS_RENDER = process.env.RENDER === 'true';
+const DB_PATH_CONFIGURED = Boolean(String(process.env.DB_PATH || '').trim());
+const HAS_RENDER_STORAGE_RISK = IS_RENDER && !DB_PATH_CONFIGURED;
 
 const readPositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
@@ -55,6 +58,12 @@ app.use(express.json({ limit: '10mb' }));
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = new sqlite3.Database(DB_PATH);
+
+if (HAS_RENDER_STORAGE_RISK) {
+  console.error('CRITICAL STORAGE WARNING: Render is using the default local SQLite path.');
+  console.error('User accounts, activations, payments, and scans can be lost after a restart or spin-down.');
+  console.error('Attach a persistent disk and set DB_PATH=/var/data/woodapp.db, or migrate to Postgres.');
+}
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (
@@ -1028,7 +1037,21 @@ cron.schedule('0 0 * * *', () => {
 // ================= HEALTH =================
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now(), uptime: process.uptime() });
+  res.json({
+    status: HAS_RENDER_STORAGE_RISK ? 'warning' : 'ok',
+    timestamp: Date.now(),
+    uptime: process.uptime(),
+    storage: {
+      database: 'sqlite',
+      dbPathConfigured: DB_PATH_CONFIGURED,
+      persistenceMode: IS_RENDER
+        ? (DB_PATH_CONFIGURED ? 'configured-not-verified' : 'ephemeral-risk')
+        : 'local-development',
+      persistenceWarning: HAS_RENDER_STORAGE_RISK
+        ? 'Render local SQLite storage is ephemeral. Configure a persistent disk or use Postgres.'
+        : null
+    }
+  });
 });
 
 app.get('/', (req, res) => {

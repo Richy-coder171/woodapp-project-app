@@ -36,18 +36,41 @@ GEMINI_API_KEY
 GROQ_API_KEY
 ```
 
-For the SQLite database, add a Render persistent disk:
+For the SQLite database, use a paid Render web service and add a persistent disk:
 
 ```text
 Mount Path: /var/data
 DB_PATH=/var/data/woodapp.db
 ```
 
+Do not run this SQLite backend on a Free Render web service. Free services lose
+local SQLite changes whenever they spin down, restart, or redeploy, so accounts,
+activations, payments, and scan history will be forgotten. If you need a free
+web service, migrate the backend database to an external Postgres provider.
+
 After deployment, verify:
 
 ```text
 https://your-backend.onrender.com/api/health
 ```
+
+The health response must show:
+
+```json
+{
+  "status": "ok",
+  "storage": {
+    "dbPathConfigured": true,
+    "persistenceMode": "configured-not-verified",
+    "persistenceWarning": null
+  }
+}
+```
+
+If it shows `"status": "warning"`, do not use the deployment for real accounts.
+Even with `"status": "ok"`, confirm that a paid persistent disk is actually
+attached in the Render dashboard. The backend can verify `DB_PATH`, but it
+cannot verify Render billing or disk attachment.
 
 ## 3. Deploy The Frontend
 

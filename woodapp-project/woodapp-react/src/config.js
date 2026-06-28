@@ -1,10 +1,13 @@
-import { LOCAL_NETWORK } from './localNetwork';
-
 const LOCAL_HOSTS = new Set(['', 'localhost', '127.0.0.1', '::1']);
 const PRIVATE_IPV4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+const PRODUCTION_API_ORIGIN = 'https://woodapp-project-app.onrender.com';
 const DEPLOYED_API_ORIGIN = String(import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
 
 function getRuntimeServerIp() {
+  if (import.meta.env.PROD) {
+    return '';
+  }
+
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
   // If a phone opens the Vite dev URL, reuse that same PC IP automatically.
@@ -12,12 +15,12 @@ function getRuntimeServerIp() {
     return hostname;
   }
 
-  return LOCAL_NETWORK.serverIp;
+  return '10.136.187.103';
 }
 
 export const SERVER_IP = getRuntimeServerIp();
-export const SERVER_PORT = String(LOCAL_NETWORK.serverPort || '3001');
-export const API_ORIGIN = DEPLOYED_API_ORIGIN || `http://${SERVER_IP}:${SERVER_PORT}`;
+export const SERVER_PORT = '3001';
+export const API_ORIGIN = DEPLOYED_API_ORIGIN || (import.meta.env.PROD ? PRODUCTION_API_ORIGIN : `http://${SERVER_IP}:${SERVER_PORT}`);
 export const API_BASE = `${API_ORIGIN}/api`;
 
 function getConnectionHelp() {

@@ -33,6 +33,8 @@ export default function ScanReviewScreen({
   const totalCount = detections.length;
   const ready = !isDetecting && totalCount > 0 && scannerStage === 'ready';
   const stageLabel = STAGE_LABELS[scannerStage] || scannerStage;
+  const hasScannerError = Boolean(scannerError);
+  const actionsDisabled = !ready || hasScannerError;
 
   return (
     <div className="screen scan-review-screen">
@@ -68,10 +70,12 @@ export default function ScanReviewScreen({
       </div>
 
       <div className="scan-review-panel">
-        <div className="scanner-stage">
-          {isDetecting && <span className="scanner-dot" aria-hidden="true" />}
-          <span>{stageLabel}</span>
-        </div>
+        {!hasScannerError && (
+          <div className="scanner-stage">
+            {isDetecting && <span className="scanner-dot" aria-hidden="true" />}
+            <span>{stageLabel}</span>
+          </div>
+        )}
 
         {ready && (
           <div className="selected-counter">
@@ -91,15 +95,15 @@ export default function ScanReviewScreen({
             <i aria-hidden="true">&lt;</i>
             Retake Photo
           </button>
-          <button className="btn-secondary" onClick={selectAll} disabled={isDetecting || totalCount === 0}>
+          <button className="btn-secondary" onClick={selectAll} disabled={actionsDisabled}>
             <i aria-hidden="true">+</i>
             Select All
           </button>
-          <button className="btn-secondary" onClick={clearAll} disabled={isDetecting || totalCount === 0}>
+          <button className="btn-secondary" onClick={clearAll} disabled={actionsDisabled}>
             <i aria-hidden="true">x</i>
             Clear All
           </button>
-          <button className="btn-primary" onClick={calculateSelected} disabled={isDetecting || totalCount === 0}>
+          <button className="btn-primary" onClick={calculateSelected} disabled={actionsDisabled}>
             <i aria-hidden="true">=</i>
             Calculate Selected
           </button>

@@ -40,4 +40,12 @@ test('node maps OCR timeout and processing failures distinctly', () => {
   assert.match(serverSource, /OCR_SERVICE_UNAVAILABLE/);
   assert.match(serverSource, /OCR_PROCESSING_FAILED/);
   assert.match(serverSource, /INVALID_IMAGE/);
+  assert.match(serverSource, /return 'OCR processing failed\. Please try again\.'/);
+});
+
+test('node forwards multipart file field with safe filename and mime type', () => {
+  assert.match(serverSource, /form\.append\('file'/);
+  assert.match(serverSource, /new Blob\(\[buffer\], \{ type: mimeType \|\| 'image\/jpeg' \}\)/);
+  assert.match(serverSource, /safeImageFilename/);
+  assert.match(serverSource, /filename/);
 });

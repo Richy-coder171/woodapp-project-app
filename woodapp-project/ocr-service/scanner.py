@@ -6,13 +6,14 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import cv2
 import numpy as np
 
 from layout import arrange_detections
-from preprocessing import PreparedImage, map_polygon_to_original, prepare_image
+from preprocessing import PreparedImage, map_polygon_to_original, prepare_decoded_image, prepare_image
 
 logger = logging.getLogger("woodapp-ocr")
 
@@ -22,6 +23,13 @@ NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 FALLBACK_MIN_DETECTIONS = 5
 DEBUG_OUTPUT_DIR = Path(__file__).resolve().parent / "debug-output"
 SAVE_DEBUG_OUTPUT = os.getenv("WOODAPP_OCR_DEBUG", "").lower() in {"1", "true", "yes"}
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -35,6 +43,10 @@ class OcrLine:
 class RegionBox:
     box: dict
     source: str = "opencv"
+
+
+class RapidOcrResultFormatError(RuntimeError):
+    pass
 
 
 def normalize_measurement_text(text: str) -> str:
@@ -61,6 +73,8 @@ def normalize_measurement_text(text: str) -> str:
     normalized = re.sub(r"(x\s*)[Oo](?=\d)", r"\g<1>0", normalized)
     normalized = re.sub(r"(\d)[Il](?=\d|\s*x)", r"\g<1>1", normalized)
     normalized = re.sub(r"(x\s*)[Il](?=\d)", r"\g<1>1", normalized)
+    normalized = re.sub(r"(?<![A-Za-z0-9])[Ss](?=\s*x)", "5", normalized)
+    normalized = re.sub(r"(x\s*\d*)[Aa](?=\b)", r"\g<1>4", normalized)
     normalized = SEPARATOR_RE.sub(" x ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip()
@@ -126,6 +140,35 @@ def _payload_from_json_like(value: Any) -> Any:
     return candidate
 
 
+def _public_attribute_names(value: Any) -> list[str]:
+    names = []
+    for name in dir(value):
+        if name.startswith("_"):
+            continue
+        try:
+            attr = getattr(value, name)
+        except Exception:
+            continue
+        if callable(attr):
+            continue
+        names.append(name)
+    return sorted(names)
+
+
+def _result_shape_error(value: Any) -> RapidOcrResultFormatError:
+    attrs = _public_attribute_names(value) if value is not None else []
+    return RapidOcrResultFormatError(
+        f"Unknown RapidOCR result shape type={type(value).__name__} attrs={attrs}"
+    )
+
+
+def _first_present(mapping: dict, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in mapping and mapping[key] is not None:
+            return mapping[key]
+    return None
+
+
 def _as_result_mapping(value: Any) -> dict | None:
     try:
         payload = _payload_from_json_like(value)
@@ -171,28 +214,20 @@ def _polygon_from_box(box: Any) -> list[list[float]] | None:
 
 
 def _extract_lines_from_mapping(mapping: dict) -> list[OcrLine] | None:
-    boxes = (
-        mapping.get("rec_polys")
-        or mapping.get("rec_boxes")
-        or mapping.get("dt_polys")
-        or mapping.get("dt_boxes")
-        or mapping.get("boxes")
-        or mapping.get("polys")
-    )
-    texts = (
-        mapping.get("rec_texts")
-        or mapping.get("texts")
-        or mapping.get("txts")
-        or mapping.get("text")
-        or mapping.get("strs")
-        or []
-    )
-    scores = mapping.get("rec_scores") or mapping.get("scores") or mapping.get("confidences") or mapping.get("confidence") or []
+    boxes = _first_present(mapping, ("rec_polys", "rec_boxes", "dt_polys", "dt_boxes", "boxes", "polys"))
+    texts = _first_present(mapping, ("rec_texts", "texts", "txts", "text", "strs"))
+    scores = _first_present(mapping, ("rec_scores", "scores", "confidences", "confidence"))
 
     if isinstance(texts, str):
         texts = [texts]
-    boxes = _plain(boxes) or []
-    scores = _plain(scores) or []
+    boxes = _plain(boxes)
+    scores = _plain(scores)
+    if boxes is None:
+        boxes = []
+    if texts is None:
+        texts = []
+    if scores is None:
+        scores = []
 
     if not isinstance(texts, (list, tuple)) or not isinstance(boxes, (list, tuple)):
         return None
@@ -244,7 +279,7 @@ def _extract_legacy_lines(page: Any) -> list[OcrLine] | None:
 
 
 def _extract_lines(result: Any) -> tuple[list[OcrLine], bool]:
-    if result == []:
+    if isinstance(result, (list, tuple)) and len(result) == 0:
         return [], True
 
     mapping = _as_result_mapping(result)
@@ -285,6 +320,20 @@ def _extract_lines(result: Any) -> tuple[list[OcrLine], bool]:
             lines.extend(extracted)
 
     return lines, found_known_shape
+
+
+def adapt_rapidocr_result(result: Any) -> list[dict]:
+    lines, known_shape = _extract_lines(result)
+    if not known_shape:
+        raise _result_shape_error(result)
+    return [
+        {
+            "text": str(line.text),
+            "confidence": float(line.confidence),
+            "polygon": [[float(point[0]), float(point[1])] for point in line.polygon],
+        }
+        for line in lines
+    ]
 
 
 def _box_from_polygon(polygon: list[list[float]], image_width: int, image_height: int) -> dict:
@@ -510,11 +559,20 @@ def _save_debug_artifacts(debug_images: dict[str, np.ndarray]) -> None:
 
 def _crop_variants(image: np.ndarray, box: dict) -> list[np.ndarray]:
     height, width = image.shape[:2]
+    raw_x1 = max(0, int(round(float(box["x"]))))
+    raw_y1 = max(0, int(round(float(box["y"]))))
+    raw_x2 = min(width, int(round(float(box["x"]) + float(box["width"]))))
+    raw_y2 = min(height, int(round(float(box["y"]) + float(box["height"]))))
+    if raw_x2 <= raw_x1 or raw_y2 <= raw_y1:
+        return []
+
     padded = _expand_box(box, width, height, max(6.0, float(box["height"]) * 0.25))
     x1 = int(max(0, round(padded["x"])))
     y1 = int(max(0, round(padded["y"])))
     x2 = int(min(width, round(padded["x"] + padded["width"])))
     y2 = int(min(height, round(padded["y"] + padded["height"])))
+    if x2 <= x1 or y2 <= y1:
+        return []
     crop = image[y1:y2, x1:x2]
     if crop.size == 0:
         return []
@@ -537,10 +595,20 @@ def _raw_result_count(result: Any) -> int:
         return len(result)
     mapping = _as_result_mapping(result)
     if mapping is not None:
-        texts = mapping.get("rec_texts") or mapping.get("texts") or []
+        texts = _first_present(mapping, ("rec_texts", "texts", "txts", "text", "strs"))
+        if texts is None:
+            texts = []
         if isinstance(texts, (list, tuple)):
             return len(texts)
         return 1 if texts else 0
+    for field in ("txts", "texts", "rec_texts"):
+        if hasattr(result, field):
+            texts = getattr(result, field)
+            if texts is None:
+                return 0
+            if isinstance(texts, (list, tuple)):
+                return len(texts)
+            return 1
     return 1
 
 
@@ -553,9 +621,11 @@ def _recognize_text_from_crop(ocr: Any, crop: np.ndarray) -> tuple[str, float, i
     for variant in _crop_variants(crop, {"x": 0, "y": 0, "width": crop.shape[1], "height": crop.shape[0]}):
         result = _run_ocr(ocr, variant)
         raw_count += _raw_result_count(result)
-        lines, known_shape = _extract_lines(result)
-        if not known_shape:
-            raise RuntimeError(f"Unexpected RapidOCR crop response shape: {type(result).__name__}")
+        try:
+            adapted = adapt_rapidocr_result(result)
+        except RapidOcrResultFormatError as exc:
+            raise RuntimeError(f"Unexpected RapidOCR crop response shape: {exc}") from exc
+        lines = [OcrLine(item["polygon"], item["text"], item["confidence"]) for item in adapted]
         extracted_count += len(lines)
         if not lines:
             continue
@@ -729,11 +799,32 @@ def _dedupe_detections(existing: list[dict], incoming: list[dict]) -> list[dict]
 class RapidOcrScanner:
     engine = "rapidocr-onnx"
 
-    def __init__(self, ocr_engine: Any | None = None) -> None:
+    def __init__(
+        self,
+        ocr_engine: Any | None = None,
+        use_fallback_variants: bool | None = None,
+        use_opencv_fallback: bool | None = None,
+    ) -> None:
         self.ocr = ocr_engine if ocr_engine is not None else create_rapidocr_engine()
+        self.use_fallback_variants = (
+            _env_bool("OCR_ENABLE_FALLBACK_VARIANTS", False)
+            if use_fallback_variants is None
+            else use_fallback_variants
+        )
+        self.use_opencv_fallback = (
+            _env_bool("OCR_ENABLE_OPENCV_FALLBACK", False)
+            if use_opencv_fallback is None
+            else use_opencv_fallback
+        )
 
     def recognize(self, image_bytes: bytes) -> dict:
         prepared = prepare_image(image_bytes)
+        return self.recognize_prepared(prepared)
+
+    def recognize_image(self, image: np.ndarray) -> dict:
+        return self.recognize_prepared(prepare_decoded_image(image))
+
+    def recognize_prepared(self, prepared: PreparedImage) -> dict:
         detections, diagnostics = self._detect(prepared)
         arranged = arrange_detections(detections, prepared.original_width, prepared.original_height)
         diagnostics["returned detections"] = len(arranged)
@@ -757,6 +848,10 @@ class RapidOcrScanner:
                 "candidateCount": int(diagnostics.get("OpenCV region count", 0)),
                 "recognizedCount": int(diagnostics.get("OCR extracted text count", 0)),
                 "returnedCount": len(arranged),
+                "preprocessingMs": int(diagnostics.get("preprocessing_ms", 0)),
+                "fullPageOcrMs": int(diagnostics.get("full_page_ocr_ms", 0)),
+                "candidateDetectionMs": int(diagnostics.get("candidate_detection_ms", 0)),
+                "cropOcrMs": int(diagnostics.get("crop_ocr_ms", 0)),
             },
         }
 
@@ -774,6 +869,7 @@ class RapidOcrScanner:
         variants = prepared.variants[:1]
         fallback_variants = prepared.variants[1:]
 
+        full_page_start = perf_counter()
         for variant in variants:
             diagnostics["processed image size"] = f"{variant.image.shape[1]}x{variant.image.shape[0]}"
             variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
@@ -782,8 +878,10 @@ class RapidOcrScanner:
             diagnostics[f"{variant.name} OCR boxes"] = line_count
             diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
             all_detections = _dedupe_detections(all_detections, variant_detections)
+        diagnostics["full_page_ocr_ms"] = int((perf_counter() - full_page_start) * 1000)
 
-        if len(all_detections) < FALLBACK_MIN_DETECTIONS:
+        preprocessing_start = perf_counter()
+        if self.use_fallback_variants and len(all_detections) < FALLBACK_MIN_DETECTIONS:
             for variant in fallback_variants:
                 variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
                 diagnostics["OCR raw result count"] += raw_count
@@ -791,14 +889,18 @@ class RapidOcrScanner:
                 diagnostics[f"{variant.name} OCR boxes"] = line_count
                 diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
                 all_detections = _dedupe_detections(all_detections, variant_detections)
+        diagnostics["preprocessing_ms"] = int((perf_counter() - preprocessing_start) * 1000)
 
-        if len(all_detections) < FALLBACK_MIN_DETECTIONS:
+        candidate_start = perf_counter()
+        if self.use_opencv_fallback and len(all_detections) < FALLBACK_MIN_DETECTIONS:
             region_detections, region_count, region_raw_count, region_text_count = self._detect_opencv_fallback(prepared)
             diagnostics["OpenCV region count"] = region_count
             diagnostics["OCR raw result count"] += region_raw_count
             diagnostics["OCR extracted text count"] += region_text_count
             diagnostics["opencv parsed detections"] = len(region_detections)
             all_detections = _dedupe_detections(all_detections, region_detections)
+        diagnostics["candidate_detection_ms"] = int((perf_counter() - candidate_start) * 1000)
+        diagnostics["crop_ocr_ms"] = diagnostics.get("candidate_detection_ms", 0)
 
         diagnostics["parsed detections"] = len(all_detections)
         diagnostics["plausible measurement count"] = len(all_detections)
@@ -807,20 +909,21 @@ class RapidOcrScanner:
     def _detect_variant(self, prepared: PreparedImage, variant: Any) -> tuple[list[dict], int, int]:
         result = _run_ocr(self.ocr, variant.image)
         raw_count = _raw_result_count(result)
-        lines, known_shape = _extract_lines(result)
-        if not known_shape:
-            raise RuntimeError(f"Unexpected RapidOCR response shape for variant {variant.name}: {type(result).__name__}")
+        try:
+            adapted = adapt_rapidocr_result(result)
+        except RapidOcrResultFormatError as exc:
+            raise RuntimeError(f"Unexpected RapidOCR response shape for variant {variant.name}: {exc}") from exc
 
         mapped_lines = [
             OcrLine(
-                polygon=map_polygon_to_original(line.polygon, variant.to_original),
-                text=line.text,
-                confidence=line.confidence,
+                polygon=map_polygon_to_original(item["polygon"], variant.to_original),
+                text=item["text"],
+                confidence=item["confidence"],
             )
-            for line in lines
+            for item in adapted
         ]
         detections = _candidate_detections(mapped_lines, prepared.original_width, prepared.original_height)
-        return detections, len(lines), raw_count
+        return detections, len(adapted), raw_count
 
     def _detect_opencv_fallback(self, prepared: PreparedImage) -> tuple[list[dict], int, int, int]:
         original_variant = prepared.variants[0]
@@ -838,6 +941,8 @@ class RapidOcrScanner:
             y1 = int(max(0, round(crop_box["y"])))
             x2 = int(min(image_width, round(crop_box["x"] + crop_box["width"])))
             y2 = int(min(image_height, round(crop_box["y"] + crop_box["height"])))
+            if x2 <= x1 or y2 <= y1:
+                continue
             crop = original_variant.image[y1:y2, x1:x2]
 
             raw_text = ""

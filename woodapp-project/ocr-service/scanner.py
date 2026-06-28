@@ -25,6 +25,13 @@ DEBUG_OUTPUT_DIR = Path(__file__).resolve().parent / "debug-output"
 SAVE_DEBUG_OUTPUT = os.getenv("WOODAPP_OCR_DEBUG", "").lower() in {"1", "true", "yes"}
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class OcrLine:
     polygon: list[list[float]]
@@ -790,8 +797,23 @@ def _dedupe_detections(existing: list[dict], incoming: list[dict]) -> list[dict]
 class RapidOcrScanner:
     engine = "rapidocr-onnx"
 
-    def __init__(self, ocr_engine: Any | None = None) -> None:
+    def __init__(
+        self,
+        ocr_engine: Any | None = None,
+        use_fallback_variants: bool | None = None,
+        use_opencv_fallback: bool | None = None,
+    ) -> None:
         self.ocr = ocr_engine if ocr_engine is not None else create_rapidocr_engine()
+        self.use_fallback_variants = (
+            _env_bool("OCR_ENABLE_FALLBACK_VARIANTS", False)
+            if use_fallback_variants is None
+            else use_fallback_variants
+        )
+        self.use_opencv_fallback = (
+            _env_bool("OCR_ENABLE_OPENCV_FALLBACK", False)
+            if use_opencv_fallback is None
+            else use_opencv_fallback
+        )
 
     def recognize(self, image_bytes: bytes) -> dict:
         prepared = prepare_image(image_bytes)
@@ -857,7 +879,7 @@ class RapidOcrScanner:
         diagnostics["full_page_ocr_ms"] = int((perf_counter() - full_page_start) * 1000)
 
         preprocessing_start = perf_counter()
-        if len(all_detections) < FALLBACK_MIN_DETECTIONS:
+        if self.use_fallback_variants and len(all_detections) < FALLBACK_MIN_DETECTIONS:
             for variant in fallback_variants:
                 variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
                 diagnostics["OCR raw result count"] += raw_count
@@ -868,7 +890,7 @@ class RapidOcrScanner:
         diagnostics["preprocessing_ms"] = int((perf_counter() - preprocessing_start) * 1000)
 
         candidate_start = perf_counter()
-        if len(all_detections) < FALLBACK_MIN_DETECTIONS:
+        if self.use_opencv_fallback and len(all_detections) < FALLBACK_MIN_DETECTIONS:
             region_detections, region_count, region_raw_count, region_text_count = self._detect_opencv_fallback(prepared)
             diagnostics["OpenCV region count"] = region_count
             diagnostics["OCR raw result count"] += region_raw_count

@@ -156,8 +156,7 @@ def test_opencv_fallback_activates_when_rapidocr_returns_zero():
         def ocr(self, image, cls=True):
             return []
 
-    scanner = RapidOcrScanner.__new__(RapidOcrScanner)
-    scanner.ocr = EmptyOcr()
+    scanner = RapidOcrScanner(ocr_engine=EmptyOcr(), use_opencv_fallback=True)
     prepared = prepare_image(encode_jpeg(synthetic_five_line_image()))
 
     detections, diagnostics = scanner._detect(prepared)
@@ -186,6 +185,24 @@ def test_empty_rapidocr_output_returns_http_safe_empty_detections():
     assert payload["detections"] == []
 
 
+def test_default_scanner_runs_single_full_page_ocr_pass_without_heavy_fallbacks():
+    class CountingOcr:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, image):
+            self.calls += 1
+            return []
+
+    engine = CountingOcr()
+    scanner = RapidOcrScanner(ocr_engine=engine)
+    payload = scanner.recognize(encode_jpeg(synthetic_five_line_image()))
+
+    assert engine.calls == 1
+    assert payload["detections"] == []
+    assert payload["diagnostics"]["candidateCount"] == 0
+
+
 def test_rapidocr_is_called_with_numpy_image_array():
     class CapturingOcr:
         def __init__(self):
@@ -196,7 +213,7 @@ def test_rapidocr_is_called_with_numpy_image_array():
             return []
 
     engine = CapturingOcr()
-    scanner = RapidOcrScanner(ocr_engine=engine)
+    scanner = RapidOcrScanner(ocr_engine=engine, use_opencv_fallback=True)
     scanner.recognize(encode_jpeg(np.full((120, 160, 3), 255, dtype=np.uint8)))
 
     assert engine.images
@@ -221,7 +238,7 @@ def test_rapidocr_engine_is_reused_for_all_regions():
             return []
 
     engine = CountingOcr()
-    scanner = RapidOcrScanner(ocr_engine=engine)
+    scanner = RapidOcrScanner(ocr_engine=engine, use_opencv_fallback=True)
     prepared = prepare_image(encode_jpeg(synthetic_five_line_image()))
 
     detections, diagnostics = scanner._detect(prepared)

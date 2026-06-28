@@ -8,6 +8,10 @@ For public internet deployment, use [DEPLOYMENT.md](DEPLOYMENT.md). This makes t
 
 See [SCANNER_UPDATE.md](SCANNER_UPDATE.md) for the free multi-column OCR scanner setup, testing and deployment instructions.
 
+## RapidOCR Migration
+
+See [RAPIDOCR_MIGRATION.md](RAPIDOCR_MIGRATION.md) for the lightweight RapidOCR/ONNX scanner architecture, local testing, Render deployment, and rollback notes.
+
 ## Android Scanner Update
 
 See [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) for Android camera, Capacitor, scanner testing, and APK build instructions.

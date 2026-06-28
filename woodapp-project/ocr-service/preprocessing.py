@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
+import os
 from typing import Optional
 
 import cv2
@@ -24,13 +25,17 @@ class PreparedImage:
 
 
 def decode_image(image_bytes: bytes) -> np.ndarray:
-    image = Image.open(BytesIO(image_bytes))
-    image = ImageOps.exif_transpose(image).convert("RGB")
+    try:
+        image = Image.open(BytesIO(image_bytes))
+        image = ImageOps.exif_transpose(image).convert("RGB")
+    except Exception as exc:
+        raise ValueError("Invalid image") from exc
     rgb = np.array(image)
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
-def _resize_for_ocr(image: np.ndarray, max_side: int = 2200) -> tuple[np.ndarray, np.ndarray]:
+def _resize_for_ocr(image: np.ndarray, max_side: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    max_side = max_side or int(os.getenv("OCR_MAX_SIDE", "1800"))
     height, width = image.shape[:2]
     longest = max(width, height)
     if longest <= max_side:

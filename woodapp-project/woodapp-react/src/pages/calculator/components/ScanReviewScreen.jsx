@@ -4,6 +4,17 @@ import {
   getSelectedCount,
 } from '../../../utils/scanSelection.js';
 
+const STAGE_LABELS = {
+  idle: 'Ready',
+  uploading: 'Uploading photo',
+  detecting: 'Detecting measurements',
+  ready: 'Ready to select',
+  empty: 'No measurements detected',
+  timeout: 'OCR timeout',
+  'service-error': 'OCR service unavailable',
+  'processing-error': 'OCR scan failed',
+};
+
 export default function ScanReviewScreen({
   capturedPreview,
   imageMeta,
@@ -20,7 +31,8 @@ export default function ScanReviewScreen({
 }) {
   const selectedCount = getSelectedCount(detections);
   const totalCount = detections.length;
-  const ready = !isDetecting && totalCount > 0;
+  const ready = !isDetecting && totalCount > 0 && scannerStage === 'ready';
+  const stageLabel = STAGE_LABELS[scannerStage] || scannerStage;
 
   return (
     <div className="screen scan-review-screen">
@@ -58,7 +70,7 @@ export default function ScanReviewScreen({
       <div className="scan-review-panel">
         <div className="scanner-stage">
           {isDetecting && <span className="scanner-dot" aria-hidden="true" />}
-          <span>{scannerStage}</span>
+          <span>{stageLabel}</span>
         </div>
 
         {ready && (
@@ -67,7 +79,7 @@ export default function ScanReviewScreen({
           </div>
         )}
 
-        {!isDetecting && totalCount === 0 && !scannerError && scannerStage !== 'No measurements detected' && (
+        {!isDetecting && totalCount === 0 && !scannerError && scannerStage === 'empty' && (
           <div className="scan-message">No measurements detected.</div>
         )}
 

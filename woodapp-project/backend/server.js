@@ -321,12 +321,35 @@ const safeJsonParse = (text) => {
   }
 };
 
+const normalizeOcrDetail = (detail) => {
+  if (detail && typeof detail === 'object') {
+    return {
+      code: detail.code || '',
+      message: detail.message || detail.error || '',
+    };
+  }
+  return { code: '', message: String(detail || '') };
+};
+
 const publicOcrError = (status, detail) => {
-  if (status === 400) return detail || 'Unsupported image';
+  const normalizedDetail = normalizeOcrDetail(detail);
+  const message = normalizedDetail.message;
+  if (status === 400) return message || 'Unsupported image';
   if (status === 408) return 'OCR timeout. Please try again with a clearer photo.';
-  if (status === 422) return detail || 'Image is too blurry or could not be read clearly';
+  if (status === 422) return message || 'Image is too blurry or could not be read clearly';
   if (status === 503) return 'OCR service unavailable. Please try again shortly.';
-  return 'OCR scan failed. Please try again.';
+  if (status >= 500) return message || 'OCR processing failed. Please try again.';
+  return message || 'OCR scan failed. Please try again.';
+};
+
+const ocrErrorCode = (status, detail) => {
+  const normalizedDetail = normalizeOcrDetail(detail);
+  if (normalizedDetail.code) return normalizedDetail.code;
+  if (status === 400) return 'INVALID_IMAGE';
+  if (status === 408) return 'OCR_TIMEOUT';
+  if (status === 503) return 'OCR_SERVICE_UNAVAILABLE';
+  if (status >= 500) return 'OCR_PROCESSING_FAILED';
+  return 'OCR_FAILED';
 };
 
 const normalizeOcrResponse = (payload) => {
@@ -377,7 +400,7 @@ const requestOcrRecognition = async ({ buffer, mimeType }) => {
     if (!response.ok) {
       const err = new Error(publicOcrError(response.status, data.detail));
       err.status = response.status;
-      err.code = response.status === 503 ? 'OCR_UNAVAILABLE' : 'OCR_FAILED';
+      err.code = ocrErrorCode(response.status, data.detail);
       throw err;
     }
 
@@ -395,7 +418,7 @@ const requestOcrRecognition = async ({ buffer, mimeType }) => {
 
     const serviceErr = new Error('OCR service unavailable. Please try again shortly.');
     serviceErr.status = 503;
-    serviceErr.code = 'OCR_UNAVAILABLE';
+    serviceErr.code = 'OCR_SERVICE_UNAVAILABLE';
     throw serviceErr;
   } finally {
     clearTimeout(timeout);
@@ -715,7 +738,7 @@ app.post('/api/scan', auth, async (req, res) => {
 
       res.json({
         success: true,
-        scanner: 'paddleocr',
+        scanner: 'rapidocr-onnx',
         imageWidth: ocr.imageWidth,
         imageHeight: ocr.imageHeight,
         detections: ocr.detections,
@@ -739,7 +762,7 @@ app.post('/api/test-scan', async (req, res) => {
   try {
     const image = parseImagePayload(imageBase64, mimeType);
     const ocr = await requestOcrRecognition(image);
-    res.json({ success: true, scanner: 'paddleocr', ...ocr });
+    res.json({ success: true, scanner: 'rapidocr-onnx', ...ocr });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message, code: err.code || 'OCR_FAILED' });
   }
@@ -973,7 +996,7 @@ app.get('/api/health', (req, res) => {
         : null
     },
     scanner: {
-      engine: 'paddleocr',
+      engine: 'rapidocr-onnx',
       ocrServiceUrlConfigured: Boolean(OCR_SERVICE_URL),
       timeoutMs: OCR_TIMEOUT_MS
     }
@@ -983,7 +1006,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'WoodApp API', version: '1.0.0',
-    scanner: 'paddleocr',
+    scanner: 'rapidocr-onnx',
     endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/payment/request','POST /api/payment/submit-utr','GET /api/payment/status','POST /api/scan','POST /api/test-scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/admin/payments','POST /api/admin/payments/:id/approve','POST /api/admin/payments/:id/reject','GET /api/health']
   });
 });

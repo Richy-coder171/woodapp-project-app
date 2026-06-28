@@ -8,7 +8,7 @@ const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'u
 test('scan route uses the OCR service endpoint', () => {
   assert.match(serverSource, /OCR_SERVICE_URL/);
   assert.match(serverSource, /\/recognize/);
-  assert.match(serverSource, /scanner: 'paddleocr'/);
+  assert.match(serverSource, /scanner: 'rapidocr-onnx'/);
 });
 
 test('Gemini and Groq are removed from the backend scanner path', () => {
@@ -33,4 +33,11 @@ test('node preserves OCR dimensions and logs returned detection count safely', (
   assert.match(serverSource, /imageWidth: ocr\.imageWidth/);
   assert.match(serverSource, /imageHeight: ocr\.imageHeight/);
   assert.match(serverSource, /console\.info\('OCR returned detections:', normalized\.detections\.length\)/);
+});
+
+test('node maps OCR timeout and processing failures distinctly', () => {
+  assert.match(serverSource, /OCR_TIMEOUT/);
+  assert.match(serverSource, /OCR_SERVICE_UNAVAILABLE/);
+  assert.match(serverSource, /OCR_PROCESSING_FAILED/);
+  assert.match(serverSource, /INVALID_IMAGE/);
 });

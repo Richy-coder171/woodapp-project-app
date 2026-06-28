@@ -92,7 +92,7 @@ export default function CalculatorApp() {
   const [userInfo, setUserInfo]           = useState('Loading...');
   const [subStatus, setSubStatus]         = useState({ status: 'Inactive', cls: 'status-inactive', title: 'Activate Subscription' });
   const [previewError, setPreviewError]   = useState('');
-  const [scannerStage, setScannerStage]   = useState('Ready to select');
+  const [scannerStage, setScannerStage]   = useState('idle');
   const [scannerError, setScannerError]   = useState('');
   const [calculationNotice, setCalculationNotice] = useState('');
   const [resultNotice, setResultNotice]   = useState('');
@@ -313,22 +313,21 @@ export default function CalculatorApp() {
 
     if (userScans.remaining <= 0) {
       setScannerError('Daily scan limit reached (200/day). Resets at midnight UTC.');
-      setScannerStage('Ready to select');
+      setScannerStage('service-error');
       setScreen('scanReview');
       return;
     }
 
     setScreen('scanReview');
     setIsDetecting(true);
-    setScannerStage('Preparing photo');
+    setScannerStage('uploading');
     setScannerError('');
     setCalculationNotice('');
     setDetections([]);
 
     try {
-      setScannerStage('Uploading photo');
       await new Promise(resolve => setTimeout(resolve, 0));
-      setScannerStage('Detecting measurements');
+      setScannerStage('detecting');
       const res = await fetch(`${API_BASE}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
@@ -337,13 +336,15 @@ export default function CalculatorApp() {
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.code === 'RATE_LIMIT')  { setScannerError('Daily scan limit reached (200/day). Resets at midnight UTC.'); setScannerStage('Ready to select'); setScreen('scanReview'); return; }
+        if (data.code === 'RATE_LIMIT')  { setScannerError('Daily scan limit reached (200/day). Resets at midnight UTC.'); setScannerStage('service-error'); setScreen('scanReview'); return; }
         if (data.code === 'SUB_EXPIRED') { setScreen('sub'); return; }
-        throw new Error(data.error || 'Scan failed');
+        const error = new Error(data.error || 'Scan failed');
+        error.code = data.code;
+        throw error;
       }
 
       setUserScans(prev => ({ ...prev, remaining: data.scansRemaining ?? 0 }));
-      setScannerStage('Loading detected areas');
+      setScannerStage('detecting');
       setImageMeta({
         width: Number(data.imageWidth || 0),
         height: Number(data.imageHeight || 0),
@@ -354,15 +355,21 @@ export default function CalculatorApp() {
       }
       setDetections(nextDetections);
       if (!nextDetections.length) {
-        setScannerStage('No measurements detected');
+        setScannerStage('empty');
         setScannerError('No measurements detected');
       } else {
-        setScannerStage('Ready to select');
+        setScannerStage('ready');
         setScannerError('');
       }
     } catch (err) {
-      setScannerError('Scan failed: ' + err.message);
-      setScannerStage('Ready to select');
+      setScannerError(err.message || 'Scan failed');
+      if (err.code === 'OCR_TIMEOUT') {
+        setScannerStage('timeout');
+      } else if (err.code === 'OCR_SERVICE_UNAVAILABLE' || err.code === 'MODEL_NOT_READY') {
+        setScannerStage('service-error');
+      } else {
+        setScannerStage('processing-error');
+      }
     } finally {
       setIsDetecting(false);
     }
@@ -388,18 +395,18 @@ export default function CalculatorApp() {
   };
 
   function calculateSelected() {
-    setScannerStage('Calculating selected measurements');
+    setScannerStage('detecting');
     const result = calculateSelectedDetections(detections);
 
     if (!result.entries.length) {
       setCalculationNotice(result.error || 'Select at least one measurement before calculating.');
-      setScannerStage('Ready to select');
+      setScannerStage('ready');
       return;
     }
 
     setEntries(result.entries);
     setResultNotice(result.error);
-    setScannerStage('Ready to select');
+    setScannerStage('ready');
     setScreen('results');
   }
 

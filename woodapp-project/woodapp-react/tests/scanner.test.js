@@ -153,8 +153,8 @@ test('scanner preview keeps the full photo visible', () => {
 test('review uses original image dimensions and hides zero error when boxes exist', () => {
   assert.match(reviewSource, /viewBox=\{getOverlayViewBox\(imageMeta\.width,\s*imageMeta\.height\)\}/);
   assert.match(reviewSource, /preserveAspectRatio="xMidYMid meet"/);
-  assert.match(reviewSource, /totalCount === 0 && !scannerError/);
-  assert.match(reviewSource, /scannerStage !== 'No measurements detected'/);
+  assert.match(reviewSource, /scannerStage === 'ready'/);
+  assert.match(reviewSource, /scannerStage === 'empty'/);
 });
 
 test('detection stores boxes and does not automatically calculate', () => {
@@ -166,4 +166,13 @@ test('detection stores boxes and does not automatically calculate', () => {
   assert.match(scanBody, /setDetections\(nextDetections\)/);
   assert.doesNotMatch(scanBody, /setScreen\('results'\)/);
   assert.doesNotMatch(scanBody, /calculateSelected\(/);
+});
+
+test('scanner failure and ready states are mutually exclusive', () => {
+  assert.match(appSource, /setScannerStage\('ready'\)/);
+  assert.match(appSource, /setScannerStage\('timeout'\)/);
+  assert.match(appSource, /setScannerStage\('service-error'\)/);
+  assert.match(appSource, /setScannerStage\('processing-error'\)/);
+  assert.doesNotMatch(appSource, /setScannerStage\('Ready to select'\)/);
+  assert.match(reviewSource, /const ready = !isDetecting && totalCount > 0 && scannerStage === 'ready'/);
 });

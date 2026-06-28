@@ -1,6 +1,6 @@
 # WoodApp OCR Service
 
-FastAPI service for the free WoodApp scanner. It prepares phone photos with OpenCV, runs PaddleOCR once-loaded at startup, and returns measurement text with rectangular coordinates. It does not calculate volume.
+FastAPI service for the free WoodApp scanner. It prepares phone photos with OpenCV, runs RapidOCR/ONNX once-loaded at startup, and returns measurement text with rectangular coordinates. It does not calculate volume.
 
 ## Local Setup
 

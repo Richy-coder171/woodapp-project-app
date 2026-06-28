@@ -88,38 +88,20 @@ def _measurement_parts(text: str) -> tuple[str, str, str] | None:
     return None
 
 
-def _create_ocr() -> Any:
-    from paddleocr import PaddleOCR
+def create_rapidocr_engine() -> Any:
+    from rapidocr import RapidOCR
 
-    try:
-        return PaddleOCR(
-            lang="en",
-            ocr_version="PP-OCRv5",
-            use_textline_orientation=True,
-        )
-    except TypeError:
-        pass
-
-    try:
-        return PaddleOCR(
-            lang="en",
-            use_angle_cls=True,
-            ocr_version="PP-OCRv5",
-            show_log=False,
-        )
-    except TypeError:
-        return PaddleOCR(lang="en", use_angle_cls=True, show_log=False)
+    return RapidOCR()
 
 
 def _run_ocr(ocr: Any, image: Any) -> Any:
+    if callable(ocr):
+        return ocr(image)
     if hasattr(ocr, "ocr"):
-        try:
-            return ocr.ocr(image, cls=True)
-        except TypeError:
-            return ocr.ocr(image)
+        return ocr.ocr(image)
     if hasattr(ocr, "predict"):
         return ocr.predict(image)
-    raise RuntimeError("Unsupported PaddleOCR runtime")
+    raise RuntimeError("Unsupported RapidOCR runtime")
 
 
 def _plain(value: Any) -> Any:
@@ -130,6 +112,10 @@ def _plain(value: Any) -> Any:
 
 def _payload_from_json_like(value: Any) -> Any:
     candidate = value
+    to_dict = getattr(candidate, "to_dict", None)
+    if callable(to_dict):
+        candidate = to_dict()
+
     json_attr = getattr(candidate, "json", None)
     if json_attr is not None:
         candidate = json_attr() if callable(json_attr) else json_attr
@@ -191,9 +177,17 @@ def _extract_lines_from_mapping(mapping: dict) -> list[OcrLine] | None:
         or mapping.get("dt_polys")
         or mapping.get("dt_boxes")
         or mapping.get("boxes")
+        or mapping.get("polys")
     )
-    texts = mapping.get("rec_texts") or mapping.get("texts") or mapping.get("text") or []
-    scores = mapping.get("rec_scores") or mapping.get("scores") or mapping.get("confidence") or []
+    texts = (
+        mapping.get("rec_texts")
+        or mapping.get("texts")
+        or mapping.get("txts")
+        or mapping.get("text")
+        or mapping.get("strs")
+        or []
+    )
+    scores = mapping.get("rec_scores") or mapping.get("scores") or mapping.get("confidences") or mapping.get("confidence") or []
 
     if isinstance(texts, str):
         texts = [texts]
@@ -231,13 +225,20 @@ def _extract_legacy_lines(page: Any) -> list[OcrLine] | None:
         polygon = _polygon_from_box(item[0])
         if polygon is None:
             continue
-        text_score = item[1]
-        if isinstance(text_score, (list, tuple)):
-            text = str(text_score[0] if text_score else "")
-            confidence = float(text_score[1]) if len(text_score) > 1 else 0.0
+        if len(item) >= 3 and isinstance(item[1], str):
+            text = str(item[1])
+            try:
+                confidence = float(item[2])
+            except (TypeError, ValueError):
+                confidence = 0.0
         else:
-            text = str(text_score)
-            confidence = 0.0
+            text_score = item[1]
+            if isinstance(text_score, (list, tuple)):
+                text = str(text_score[0] if text_score else "")
+                confidence = float(text_score[1]) if len(text_score) > 1 else 0.0
+            else:
+                text = str(text_score)
+                confidence = 0.0
         lines.append(OcrLine(polygon=polygon, text=text, confidence=confidence))
     return lines
 
@@ -254,6 +255,15 @@ def _extract_lines(result: Any) -> tuple[list[OcrLine], bool]:
 
     if isinstance(result, dict):
         lines = _extract_lines_from_mapping(result)
+        if lines is not None:
+            return lines, True
+
+    rapid_attrs = {}
+    for field in ("boxes", "txts", "texts", "scores", "rec_texts", "rec_scores", "rec_polys"):
+        if hasattr(result, field):
+            rapid_attrs[field] = getattr(result, field)
+    if rapid_attrs:
+        lines = _extract_lines_from_mapping(rapid_attrs)
         if lines is not None:
             return lines, True
 
@@ -545,7 +555,7 @@ def _recognize_text_from_crop(ocr: Any, crop: np.ndarray) -> tuple[str, float, i
         raw_count += _raw_result_count(result)
         lines, known_shape = _extract_lines(result)
         if not known_shape:
-            raise RuntimeError(f"Unexpected PaddleOCR crop response shape: {type(result).__name__}")
+            raise RuntimeError(f"Unexpected RapidOCR crop response shape: {type(result).__name__}")
         extracted_count += len(lines)
         if not lines:
             continue
@@ -716,9 +726,11 @@ def _dedupe_detections(existing: list[dict], incoming: list[dict]) -> list[dict]
     return merged
 
 
-class PaddleScanner:
-    def __init__(self) -> None:
-        self.ocr = _create_ocr()
+class RapidOcrScanner:
+    engine = "rapidocr-onnx"
+
+    def __init__(self, ocr_engine: Any | None = None) -> None:
+        self.ocr = ocr_engine if ocr_engine is not None else create_rapidocr_engine()
 
     def recognize(self, image_bytes: bytes) -> dict:
         prepared = prepare_image(image_bytes)
@@ -739,7 +751,13 @@ class PaddleScanner:
         return {
             "imageWidth": prepared.original_width,
             "imageHeight": prepared.original_height,
+            "engine": self.engine,
             "detections": arranged,
+            "diagnostics": {
+                "candidateCount": int(diagnostics.get("OpenCV region count", 0)),
+                "recognizedCount": int(diagnostics.get("OCR extracted text count", 0)),
+                "returnedCount": len(arranged),
+            },
         }
 
     def _detect(self, prepared: PreparedImage) -> tuple[list[dict], dict[str, int]]:
@@ -791,7 +809,7 @@ class PaddleScanner:
         raw_count = _raw_result_count(result)
         lines, known_shape = _extract_lines(result)
         if not known_shape:
-            raise RuntimeError(f"Unexpected PaddleOCR response shape for variant {variant.name}: {type(result).__name__}")
+            raise RuntimeError(f"Unexpected RapidOCR response shape for variant {variant.name}: {type(result).__name__}")
 
         mapped_lines = [
             OcrLine(

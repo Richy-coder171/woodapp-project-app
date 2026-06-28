@@ -1,6 +1,6 @@
 from scanner import (
     OcrLine,
-    PaddleScanner,
+    RapidOcrScanner,
     _candidate_detections,
     _create_blue_ink_mask,
     _extract_lines,
@@ -56,7 +56,7 @@ def test_decimal_commas_and_context_digits_are_normalized():
     assert parse_measurement("4,5 x 36") == {"aRaw": "4.5", "bRaw": "36"}
 
 
-def test_paddleocr_v3_response_shape_is_extracted():
+def test_rapidocr_mapping_response_shape_is_extracted():
     result = {
         "res": {
             "rec_texts": ["4 x 12", "5 x 14"],
@@ -117,12 +117,12 @@ def test_blue_handwriting_remains_visible_after_masking():
     assert cv2.countNonZero(mask) > 1000
 
 
-def test_opencv_fallback_activates_when_paddleocr_returns_zero():
+def test_opencv_fallback_activates_when_rapidocr_returns_zero():
     class EmptyOcr:
         def ocr(self, image, cls=True):
             return []
 
-    scanner = PaddleScanner.__new__(PaddleScanner)
+    scanner = RapidOcrScanner.__new__(RapidOcrScanner)
     scanner.ocr = EmptyOcr()
     prepared = prepare_image(encode_jpeg(synthetic_five_line_image()))
 
@@ -131,6 +131,27 @@ def test_opencv_fallback_activates_when_paddleocr_returns_zero():
     assert diagnostics["OpenCV region count"] == 5
     assert len(detections) == 5
     assert all(item["selected"] is True for item in detections)
+
+
+def test_rapidocr_engine_is_reused_for_all_regions():
+    class CountingOcr:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, image):
+            self.calls += 1
+            return []
+
+    engine = CountingOcr()
+    scanner = RapidOcrScanner(ocr_engine=engine)
+    prepared = prepare_image(encode_jpeg(synthetic_five_line_image()))
+
+    detections, diagnostics = scanner._detect(prepared)
+
+    assert engine.calls >= 1
+    assert scanner.ocr is engine
+    assert diagnostics["OpenCV region count"] == 5
+    assert len(detections) == 5
 
 
 def test_four_column_grouping_stays_separate():

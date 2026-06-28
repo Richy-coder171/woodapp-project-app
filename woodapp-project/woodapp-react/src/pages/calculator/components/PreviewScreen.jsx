@@ -20,7 +20,7 @@ export default function PreviewScreen({ capturedPreview, previewError, retake, s
           onClick={scanImage}
         >
           <i aria-hidden="true">#</i>
-          Scan &amp; Calculate
+          Detect Measurements
         </button>
       </div>
     </div>

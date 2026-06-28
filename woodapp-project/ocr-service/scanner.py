@@ -73,6 +73,8 @@ def normalize_measurement_text(text: str) -> str:
     normalized = re.sub(r"(x\s*)[Oo](?=\d)", r"\g<1>0", normalized)
     normalized = re.sub(r"(\d)[Il](?=\d|\s*x)", r"\g<1>1", normalized)
     normalized = re.sub(r"(x\s*)[Il](?=\d)", r"\g<1>1", normalized)
+    normalized = re.sub(r"(?<![A-Za-z0-9])[Ss](?=\s*x)", "5", normalized)
+    normalized = re.sub(r"(x\s*\d*)[Aa](?=\b)", r"\g<1>4", normalized)
     normalized = SEPARATOR_RE.sub(" x ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip()

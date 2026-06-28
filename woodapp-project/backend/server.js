@@ -347,7 +347,7 @@ const publicOcrError = (status, detail) => {
   if (status === 408) return 'OCR timeout. Please try again with a clearer photo.';
   if (status === 422) return message || 'Image is too blurry or could not be read clearly';
   if (status === 503) return 'OCR service unavailable. Please try again shortly.';
-  if (status >= 500) return message || 'OCR processing failed. Please try again.';
+  if (status >= 500) return 'OCR processing failed. Please try again.';
   return message || 'OCR scan failed. Please try again.';
 };
 

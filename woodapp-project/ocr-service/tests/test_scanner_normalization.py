@@ -59,6 +59,13 @@ def test_decimal_commas_and_context_digits_are_normalized():
     assert parse_measurement("4,5 x 36") == {"aRaw": "4.5", "bRaw": "36"}
 
 
+def test_common_ocr_digit_confusions_are_normalized_in_measurements_only():
+    assert normalize_measurement_text("5×1A") == "5 x 14"
+    assert normalize_measurement_text("Sx14") == "5 x 14"
+    assert parse_measurement("5×1A") == {"aRaw": "5", "bRaw": "14"}
+    assert parse_measurement("Sx14") == {"aRaw": "5", "bRaw": "14"}
+
+
 def test_rapidocr_mapping_response_shape_is_extracted():
     result = {
         "res": {

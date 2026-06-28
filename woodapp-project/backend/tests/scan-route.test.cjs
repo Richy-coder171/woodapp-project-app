@@ -28,3 +28,9 @@ test('scan route returns detections instead of calculated entries', () => {
   assert.match(serverSource, /detections: ocr\.detections/);
   assert.doesNotMatch(serverSource, /entries: parsed\.entries/);
 });
+
+test('node preserves OCR dimensions and logs returned detection count safely', () => {
+  assert.match(serverSource, /imageWidth: ocr\.imageWidth/);
+  assert.match(serverSource, /imageHeight: ocr\.imageHeight/);
+  assert.match(serverSource, /console\.info\('OCR returned detections:', normalized\.detections\.length\)/);
+});

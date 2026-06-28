@@ -382,7 +382,7 @@ const requestOcrRecognition = async ({ buffer, mimeType }) => {
     }
 
     const normalized = normalizeOcrResponse(data);
-    console.log('[SCAN] OCR service detection count:', normalized.detections.length);
+    console.info('OCR returned detections:', normalized.detections.length);
     return normalized;
   } catch (err) {
     if (err.name === 'AbortError') {

@@ -45,6 +45,20 @@ The original image remains the first OCR pass. Fallback variants run only when t
 
 The blue-ink variant uses HSV blue masking plus a blue-vs-red channel check so faint blue strokes remain visible instead of being erased by binary thresholding. The scanner combines detections from fallback variants with bounding-box overlap deduplication.
 
+## OpenCV Region Fallback
+
+The OCR service now has a separate OpenCV fallback in `ocr-service/scanner.py`:
+
+- Builds a blue-ink mask and enhanced grayscale threshold without relying on PaddleOCR text detection.
+- Uses connected components and dynamic morphology/grouping rules to find likely handwritten measurement lines.
+- Merges nearby components into one line box, so `4`, `x`, and `12` become one `4 x 12` region.
+- Preserves future multi-column pages by splitting large horizontal gaps and supporting one to six columns.
+- Crops each OpenCV region and runs PaddleOCR recognition on original, contrast-enhanced, and blue-ink crop variants.
+- Returns visible boxes even when crop text is imperfect, leaving strict validation to `Calculate Selected`.
+- Logs safe counts only: received image size, processed image size, OCR raw result count, OCR extracted text count, OpenCV region count, plausible measurement count, and returned detection count.
+
+Debug image saving is available only when `WOODAPP_OCR_DEBUG=1`; files are written under ignored `ocr-service/debug-output/`.
+
 ## Frontend Filtering
 
 `woodapp-react/src/utils/calc.js` now tolerates:
@@ -88,10 +102,10 @@ The SVG overlay uses the OCR service's original `imageWidth` and `imageHeight` t
 Passed:
 
 - `python -m py_compile ocr-service\app.py ocr-service\scanner.py ocr-service\preprocessing.py ocr-service\layout.py`
-- Manual OCR parser tests via `runpy`: `ocr-service/tests/test_scanner_normalization.py`
+- Manual OCR parser/OpenCV fallback tests via `runpy`: `ocr-service/tests/test_scanner_normalization.py`
 - Manual layout tests via `runpy`: `ocr-service/tests/test_layout.py`
 - `npm.cmd test` in `woodapp-react` - 12/12 tests passed.
-- `npm.cmd test` in `backend` - 4/4 tests passed.
+- `npm.cmd test` in `backend` - 5/5 tests passed.
 - `npm.cmd run build` in `woodapp-react`.
 - `npm.cmd run android:sync` in `woodapp-react`.
 - `.\gradlew.bat assembleDebug` in `woodapp-react/android`.
@@ -100,7 +114,7 @@ Blocked locally:
 
 - `python -m pytest` in `ocr-service` failed because this Python environment does not have `pytest` installed.
 - Installed PaddleOCR/PaddlePaddle versions could not be inspected because `paddleocr` is not installed locally.
-- A live `POST /recognize` test could not be run locally for the same reason.
+- `uvicorn app:app --host 0.0.0.0 --port 8000` and a live `POST /recognize` test could not be run locally because `fastapi`, `uvicorn`, and `paddleocr` are not installed in this Python environment.
 
 ## Android APK
 
@@ -113,7 +127,7 @@ D:\woodapp-project\woodapp-project\woodapp-react\android\app\build\outputs\apk\d
 Build timestamp:
 
 ```text
-27-06-2026 20:37:33
+28-06-2026 21:13:24
 ```
 
 Size:

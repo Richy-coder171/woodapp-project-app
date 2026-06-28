@@ -1,14 +1,48 @@
 from scanner import (
     OcrLine,
+    PaddleScanner,
     _candidate_detections,
+    _create_blue_ink_mask,
     _extract_lines,
+    _group_components_into_lines,
     normalize_measurement_text,
     parse_measurement,
+    detect_opencv_regions,
 )
+from preprocessing import prepare_image
+
+import cv2
+import numpy as np
 
 
 def box(x, y, width, height):
     return [[x, y], [x + width, y], [x + width, y + height], [x, y + height]]
+
+
+def rect(x, y, width, height):
+    return {"x": float(x), "y": float(y), "width": float(width), "height": float(height)}
+
+
+def synthetic_five_line_image():
+    image = np.full((900, 600, 3), (248, 246, 238), dtype=np.uint8)
+    for index, text in enumerate(["4 x 12", "5 x 14", "3 x 17", "2 x 13", "6 x 12"]):
+        cv2.putText(
+            image,
+            text,
+            (120, 160 + index * 90),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.65,
+            (165, 86, 29),
+            3,
+            cv2.LINE_AA,
+        )
+    return image
+
+
+def encode_jpeg(image):
+    ok, encoded = cv2.imencode(".jpg", image)
+    assert ok
+    return encoded.tobytes()
 
 
 def test_normalizes_common_ocr_separators():
@@ -66,3 +100,53 @@ def test_five_line_fixture_returns_five_independent_detections():
     assert [item["normalizedText"] for item in detections] == texts
     assert all(item["selected"] is True for item in detections)
     assert all(item["box"]["width"] > 0 and item["box"]["height"] > 0 for item in detections)
+
+
+def test_opencv_five_line_fixture_produces_ordered_regions():
+    regions, _ = detect_opencv_regions(synthetic_five_line_image())
+
+    assert len(regions) == 5
+    boxes = [region.box for region in regions]
+    assert [box["y"] for box in boxes] == sorted(box["y"] for box in boxes)
+    assert all(box["width"] > 0 and box["height"] > 0 for box in boxes)
+
+
+def test_blue_handwriting_remains_visible_after_masking():
+    mask = _create_blue_ink_mask(synthetic_five_line_image())
+
+    assert cv2.countNonZero(mask) > 1000
+
+
+def test_opencv_fallback_activates_when_paddleocr_returns_zero():
+    class EmptyOcr:
+        def ocr(self, image, cls=True):
+            return []
+
+    scanner = PaddleScanner.__new__(PaddleScanner)
+    scanner.ocr = EmptyOcr()
+    prepared = prepare_image(encode_jpeg(synthetic_five_line_image()))
+
+    detections, diagnostics = scanner._detect(prepared)
+
+    assert diagnostics["OpenCV region count"] == 5
+    assert len(detections) == 5
+    assert all(item["selected"] is True for item in detections)
+
+
+def test_four_column_grouping_stays_separate():
+    components = []
+    for column in range(4):
+        for row in range(3):
+            x = 60 + column * 220
+            y = 80 + row * 90
+            components.extend([
+                rect(x, y, 18, 36),
+                rect(x + 34, y + 3, 18, 30),
+                rect(x + 68, y, 48, 36),
+            ])
+
+    lines = _group_components_into_lines(components, 1000, 500)
+
+    assert len(lines) == 12
+    centers = sorted(round(item["x"] + item["width"] / 2, -1) for item in lines)
+    assert len(set(centers)) >= 4

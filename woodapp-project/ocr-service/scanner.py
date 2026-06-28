@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import cv2
+import numpy as np
 
 from layout import arrange_detections
 from preprocessing import PreparedImage, map_polygon_to_original, prepare_image
@@ -15,6 +20,8 @@ SEPARATOR_RE = re.compile(r"\s*(?:x|X|\*|times|by)\s*")
 MEASUREMENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)", re.I)
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 FALLBACK_MIN_DETECTIONS = 5
+DEBUG_OUTPUT_DIR = Path(__file__).resolve().parent / "debug-output"
+SAVE_DEBUG_OUTPUT = os.getenv("WOODAPP_OCR_DEBUG", "").lower() in {"1", "true", "yes"}
 
 
 @dataclass
@@ -22,6 +29,12 @@ class OcrLine:
     polygon: list[list[float]]
     text: str
     confidence: float
+
+
+@dataclass
+class RegionBox:
+    box: dict
+    source: str = "opencv"
 
 
 def normalize_measurement_text(text: str) -> str:
@@ -312,6 +325,243 @@ def _union_box(boxes: list[dict]) -> dict:
     return {"x": x1, "y": y1, "width": x2 - x1, "height": y2 - y1}
 
 
+def _expand_box(box: dict, image_width: int, image_height: int, pad: float) -> dict:
+    x1 = max(0.0, float(box["x"]) - pad)
+    y1 = max(0.0, float(box["y"]) - pad)
+    x2 = min(float(image_width), float(box["x"]) + float(box["width"]) + pad)
+    y2 = min(float(image_height), float(box["y"]) + float(box["height"]) + pad)
+    return {
+        "x": round(x1, 2),
+        "y": round(y1, 2),
+        "width": round(max(1.0, x2 - x1), 2),
+        "height": round(max(1.0, y2 - y1), 2),
+    }
+
+
+def _box_center_y(box: dict) -> float:
+    return float(box["y"]) + float(box["height"]) / 2
+
+
+def _box_center_x(box: dict) -> float:
+    return float(box["x"]) + float(box["width"]) / 2
+
+
+def _create_blue_ink_mask(image: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    blue_mask = cv2.inRange(hsv, np.array([82, 18, 20]), np.array([150, 255, 255]))
+
+    blue = image[:, :, 0].astype(np.int16)
+    green = image[:, :, 1].astype(np.int16)
+    red = image[:, :, 2].astype(np.int16)
+    blue_dominant = ((blue - red > 14) & (blue - green > -8)).astype(np.uint8) * 255
+    mask = cv2.bitwise_or(blue_mask, blue_dominant)
+    return cv2.medianBlur(mask, 3)
+
+
+def _create_enhanced_gray(image: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+    return clahe.apply(gray)
+
+
+def _create_handwriting_mask(image: np.ndarray) -> np.ndarray:
+    gray = _create_enhanced_gray(image)
+    threshold = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        35,
+        11,
+    )
+    blue_mask = _create_blue_ink_mask(image)
+    mask = cv2.bitwise_or(threshold, blue_mask)
+    mask = cv2.medianBlur(mask, 3)
+    return mask
+
+
+def _component_boxes(mask: np.ndarray) -> list[dict]:
+    height, width = mask.shape[:2]
+    image_area = max(1, height * width)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    boxes: list[dict] = []
+
+    for index in range(1, count):
+        x, y, w, h, area = stats[index]
+        if area < max(6, image_area * 0.000004):
+            continue
+        if w < max(2, width * 0.002) or h < max(3, height * 0.002):
+            continue
+        if w > width * 0.85 or h > height * 0.25:
+            continue
+        boxes.append({"x": float(x), "y": float(y), "width": float(w), "height": float(h)})
+
+    return boxes
+
+
+def _group_components_into_lines(components: list[dict], image_width: int, image_height: int) -> list[dict]:
+    if not components:
+        return []
+
+    heights = sorted(max(1.0, float(box["height"])) for box in components)
+    widths = sorted(max(1.0, float(box["width"])) for box in components)
+    median_height = heights[len(heights) // 2]
+    median_width = widths[len(widths) // 2]
+
+    components = sorted(components, key=lambda box: (_box_center_y(box), float(box["x"])))
+    rows: list[list[dict]] = []
+    for box in components:
+        placed = False
+        for row in rows:
+            row_box = _union_box(row)
+            baseline_gap = abs(_box_center_y(box) - _box_center_y(row_box))
+            if baseline_gap <= max(median_height * 0.9, row_box["height"] * 0.65) or _vertical_overlap(box, row_box) >= 0.35:
+                row.append(box)
+                placed = True
+                break
+        if not placed:
+            rows.append([box])
+
+    line_boxes: list[dict] = []
+    for row in rows:
+        row.sort(key=lambda box: box["x"])
+        current: list[dict] = []
+        for box in row:
+            if not current:
+                current.append(box)
+                continue
+
+            previous = current[-1]
+            gap = float(box["x"]) - (float(previous["x"]) + float(previous["width"]))
+            row_box = _union_box(current)
+            max_gap = max(median_width * 4.0, median_height * 3.0, row_box["height"] * 3.0)
+            column_gap = max(image_width * 0.075, median_height * 2.7, median_width * 4.5)
+            likely_new_column = gap > column_gap
+            same_line = _vertical_overlap(box, row_box) >= 0.25 or abs(_box_center_y(box) - _box_center_y(row_box)) <= median_height
+
+            if same_line and gap <= max_gap and not likely_new_column:
+                current.append(box)
+            else:
+                line_boxes.append(_union_box(current))
+                current = [box]
+        if current:
+            line_boxes.append(_union_box(current))
+
+    min_width = max(median_width * 2.4, image_width * 0.025)
+    min_height = max(5.0, median_height * 0.65)
+    useful = [
+        _expand_box(box, image_width, image_height, max(4.0, median_height * 0.35))
+        for box in line_boxes
+        if box["width"] >= min_width and box["height"] >= min_height
+    ]
+    useful.sort(key=lambda box: (box["x"], box["y"]))
+    return useful
+
+
+def detect_opencv_regions(image: np.ndarray) -> tuple[list[RegionBox], dict[str, np.ndarray]]:
+    mask = _create_handwriting_mask(image)
+    height, width = image.shape[:2]
+    components = _component_boxes(mask)
+    line_boxes = _group_components_into_lines(components, width, height)
+
+    debug_image = image.copy()
+    for box in line_boxes:
+        x1 = int(round(box["x"]))
+        y1 = int(round(box["y"]))
+        x2 = int(round(box["x"] + box["width"]))
+        y2 = int(round(box["y"] + box["height"]))
+        cv2.rectangle(debug_image, (x1, y1), (x2, y2), (0, 180, 0), 2)
+
+    threshold = cv2.adaptiveThreshold(
+        _create_enhanced_gray(image),
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        35,
+        11,
+    )
+    debug = {
+        "original": image,
+        "blue-ink-mask": _create_blue_ink_mask(image),
+        "enhanced-gray": _create_enhanced_gray(image),
+        "threshold": threshold,
+        "opencv-rectangles": debug_image,
+    }
+    return [RegionBox(box=box) for box in line_boxes], debug
+
+
+def _save_debug_artifacts(debug_images: dict[str, np.ndarray]) -> None:
+    if not SAVE_DEBUG_OUTPUT:
+        return
+    DEBUG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for name, image in debug_images.items():
+        cv2.imwrite(str(DEBUG_OUTPUT_DIR / f"{name}.png"), image)
+
+
+def _crop_variants(image: np.ndarray, box: dict) -> list[np.ndarray]:
+    height, width = image.shape[:2]
+    padded = _expand_box(box, width, height, max(6.0, float(box["height"]) * 0.25))
+    x1 = int(max(0, round(padded["x"])))
+    y1 = int(max(0, round(padded["y"])))
+    x2 = int(min(width, round(padded["x"] + padded["width"])))
+    y2 = int(min(height, round(padded["y"] + padded["height"])))
+    crop = image[y1:y2, x1:x2]
+    if crop.size == 0:
+        return []
+
+    gray = _create_enhanced_gray(crop)
+    blue_mask = _create_blue_ink_mask(crop)
+    blue_on_white = np.full_like(blue_mask, 255)
+    blue_on_white[blue_mask > 0] = 0
+    return [
+        crop,
+        cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR),
+        cv2.cvtColor(blue_on_white, cv2.COLOR_GRAY2BGR),
+    ]
+
+
+def _raw_result_count(result: Any) -> int:
+    if result is None:
+        return 0
+    if isinstance(result, (list, tuple)):
+        return len(result)
+    mapping = _as_result_mapping(result)
+    if mapping is not None:
+        texts = mapping.get("rec_texts") or mapping.get("texts") or []
+        if isinstance(texts, (list, tuple)):
+            return len(texts)
+        return 1 if texts else 0
+    return 1
+
+
+def _recognize_text_from_crop(ocr: Any, crop: np.ndarray) -> tuple[str, float, int, int]:
+    best_text = ""
+    best_confidence = 0.0
+    raw_count = 0
+    extracted_count = 0
+
+    for variant in _crop_variants(crop, {"x": 0, "y": 0, "width": crop.shape[1], "height": crop.shape[0]}):
+        result = _run_ocr(ocr, variant)
+        raw_count += _raw_result_count(result)
+        lines, known_shape = _extract_lines(result)
+        if not known_shape:
+            raise RuntimeError(f"Unexpected PaddleOCR crop response shape: {type(result).__name__}")
+        extracted_count += len(lines)
+        if not lines:
+            continue
+
+        lines.sort(key=lambda line: (_center_y(line), _center_x(line)))
+        text = " ".join(line.text.strip() for line in lines if line.text.strip())
+        confidence = sum(line.confidence for line in lines) / max(1, len(lines))
+        if _measurement_parts(text):
+            return text, confidence, raw_count, extracted_count
+        if len(text) > len(best_text):
+            best_text = text
+            best_confidence = confidence
+
+    return best_text, best_confidence, raw_count, extracted_count
+
+
 def _split_multiline(line: OcrLine, image_width: int, image_height: int) -> list[OcrLine]:
     parts = [part.strip() for part in re.split(r"[\r\n]+", line.text) if part.strip()]
     if len(parts) <= 1:
@@ -475,7 +725,17 @@ class PaddleScanner:
         detections, diagnostics = self._detect(prepared)
         arranged = arrange_detections(detections, prepared.original_width, prepared.original_height)
         diagnostics["returned detections"] = len(arranged)
-        logger.info("OCR diagnostic counts: %s", diagnostics)
+        logger.info(
+            "OCR diagnostic counts: received image size=%s processed image size=%s OCR raw result count=%s "
+            "OCR extracted text count=%s OpenCV region count=%s plausible measurement count=%s returned detection count=%s",
+            diagnostics.get("received image size", ""),
+            diagnostics.get("processed image size", ""),
+            diagnostics.get("OCR raw result count", 0),
+            diagnostics.get("OCR extracted text count", 0),
+            diagnostics.get("OpenCV region count", 0),
+            diagnostics.get("plausible measurement count", 0),
+            diagnostics.get("returned detections", 0),
+        )
         return {
             "imageWidth": prepared.original_width,
             "imageHeight": prepared.original_height,
@@ -484,29 +744,51 @@ class PaddleScanner:
 
     def _detect(self, prepared: PreparedImage) -> tuple[list[dict], dict[str, int]]:
         all_detections: list[dict] = []
-        diagnostics: dict[str, int] = {}
+        diagnostics: dict[str, Any] = {
+            "received image size": f"{prepared.original_width}x{prepared.original_height}",
+            "processed image size": "",
+            "OCR raw result count": 0,
+            "OCR extracted text count": 0,
+            "OpenCV region count": 0,
+            "plausible measurement count": 0,
+        }
 
         variants = prepared.variants[:1]
         fallback_variants = prepared.variants[1:]
 
         for variant in variants:
-            variant_detections, line_count = self._detect_variant(prepared, variant)
+            diagnostics["processed image size"] = f"{variant.image.shape[1]}x{variant.image.shape[0]}"
+            variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
+            diagnostics["OCR raw result count"] += raw_count
+            diagnostics["OCR extracted text count"] += line_count
             diagnostics[f"{variant.name} OCR boxes"] = line_count
             diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
             all_detections = _dedupe_detections(all_detections, variant_detections)
 
         if len(all_detections) < FALLBACK_MIN_DETECTIONS:
             for variant in fallback_variants:
-                variant_detections, line_count = self._detect_variant(prepared, variant)
+                variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
+                diagnostics["OCR raw result count"] += raw_count
+                diagnostics["OCR extracted text count"] += line_count
                 diagnostics[f"{variant.name} OCR boxes"] = line_count
                 diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
                 all_detections = _dedupe_detections(all_detections, variant_detections)
 
+        if len(all_detections) < FALLBACK_MIN_DETECTIONS:
+            region_detections, region_count, region_raw_count, region_text_count = self._detect_opencv_fallback(prepared)
+            diagnostics["OpenCV region count"] = region_count
+            diagnostics["OCR raw result count"] += region_raw_count
+            diagnostics["OCR extracted text count"] += region_text_count
+            diagnostics["opencv parsed detections"] = len(region_detections)
+            all_detections = _dedupe_detections(all_detections, region_detections)
+
         diagnostics["parsed detections"] = len(all_detections)
+        diagnostics["plausible measurement count"] = len(all_detections)
         return all_detections, diagnostics
 
-    def _detect_variant(self, prepared: PreparedImage, variant: Any) -> tuple[list[dict], int]:
+    def _detect_variant(self, prepared: PreparedImage, variant: Any) -> tuple[list[dict], int, int]:
         result = _run_ocr(self.ocr, variant.image)
+        raw_count = _raw_result_count(result)
         lines, known_shape = _extract_lines(result)
         if not known_shape:
             raise RuntimeError(f"Unexpected PaddleOCR response shape for variant {variant.name}: {type(result).__name__}")
@@ -520,4 +802,35 @@ class PaddleScanner:
             for line in lines
         ]
         detections = _candidate_detections(mapped_lines, prepared.original_width, prepared.original_height)
-        return detections, len(lines)
+        return detections, len(lines), raw_count
+
+    def _detect_opencv_fallback(self, prepared: PreparedImage) -> tuple[list[dict], int, int, int]:
+        original_variant = prepared.variants[0]
+        regions, debug_images = detect_opencv_regions(original_variant.image)
+        _save_debug_artifacts(debug_images)
+
+        detections: list[dict] = []
+        raw_count = 0
+        text_count = 0
+        image_height, image_width = original_variant.image.shape[:2]
+
+        for region in regions:
+            crop_box = _expand_box(region.box, image_width, image_height, max(6.0, region.box["height"] * 0.22))
+            x1 = int(max(0, round(crop_box["x"])))
+            y1 = int(max(0, round(crop_box["y"])))
+            x2 = int(min(image_width, round(crop_box["x"] + crop_box["width"])))
+            y2 = int(min(image_height, round(crop_box["y"] + crop_box["height"])))
+            crop = original_variant.image[y1:y2, x1:x2]
+
+            raw_text = ""
+            confidence = 0.0
+            if crop.size:
+                raw_text, confidence, crop_raw_count, crop_text_count = _recognize_text_from_crop(self.ocr, crop)
+                raw_count += crop_raw_count
+                text_count += crop_text_count
+
+            mapped_polygon = map_polygon_to_original(_polygon_from_rect(region.box), original_variant.to_original)
+            original_box = _box_from_polygon(mapped_polygon, prepared.original_width, prepared.original_height)
+            detections.append(_make_detection(OcrLine(mapped_polygon, raw_text, confidence), raw_text, original_box))
+
+        return detections, len(regions), raw_count, text_count

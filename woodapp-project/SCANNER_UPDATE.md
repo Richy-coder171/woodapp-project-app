@@ -2,10 +2,7 @@
 
 ## 1. Why The Old Gemini/Groq Scanner Was Replaced
 
-The old scanner sent the whole photo to Gemini and used Groq as a fallback. That worked for small single-column pages, but it often merged or missed measurements when a photo contained several columns, such as four columns with about ten rows each. It also depended on AI API keys, rate limits, and model behavior. The new scanner is detection-first: it finds each measurement box, lets the user choose which boxes count, and only then uses the existing WoodApp formula.
-
-## 2. New Free Scanner Architecture
-
+The old scanner sent the whole photo to Gemini and used Groq as a fallback. That worked for small single-column pages, but it often merged or missed measurements when a photo contained several columns, such as four columns wi   
 The scanner is now split into three parts:
 
 - React frontend: captures or uploads the original photo, draws selectable SVG boxes, and calculates selected measurements.

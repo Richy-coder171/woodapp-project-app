@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 import os
+from time import perf_counter
 from typing import Optional
 
 import cv2
@@ -10,6 +11,14 @@ import numpy as np
 from PIL import Image, ImageOps
 
 Image.MAX_IMAGE_PIXELS = int(os.getenv("PIL_MAX_IMAGE_PIXELS", "80000000"))
+
+
+class ImageDecodeError(ValueError):
+    pass
+
+
+class InvalidImageDimensionsError(ValueError):
+    pass
 
 
 @dataclass
@@ -26,14 +35,28 @@ class PreparedImage:
     variants: list[PreparedVariant]
 
 
-def decode_image(image_bytes: bytes) -> np.ndarray:
+def decode_image(image_bytes: bytes, timings: dict[str, float] | None = None) -> np.ndarray:
     try:
+        decode_start = perf_counter()
         image = Image.open(BytesIO(image_bytes))
+        if timings is not None:
+            timings["decode_ms"] = (perf_counter() - decode_start) * 1000
+        orientation_start = perf_counter()
         image = ImageOps.exif_transpose(image).convert("RGB")
+        if timings is not None:
+            timings["orientation_ms"] = (perf_counter() - orientation_start) * 1000
     except Exception as exc:
-        raise ValueError("Invalid image") from exc
+        raise ImageDecodeError("Invalid image") from exc
     rgb = np.array(image)
-    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    decoded = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    if decoded is None:
+        raise ImageDecodeError("Invalid image")
+    if decoded.ndim not in (2, 3):
+        raise InvalidImageDimensionsError("Invalid image dimensions")
+    height, width = decoded.shape[:2]
+    if width <= 0 or height <= 0:
+        raise InvalidImageDimensionsError("Invalid image dimensions")
+    return decoded
 
 
 def _resize_for_ocr(image: np.ndarray, max_side: int | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -195,10 +218,14 @@ def _threshold(gray: np.ndarray) -> np.ndarray:
 
 
 def prepare_decoded_image(original: np.ndarray) -> PreparedImage:
-    if original is None or not hasattr(original, "shape") or len(original.shape) < 2:
-        raise ValueError("Invalid image")
+    if original is None or not hasattr(original, "shape"):
+        raise ImageDecodeError("Invalid image")
+    if original.ndim not in (2, 3):
+        raise InvalidImageDimensionsError("Invalid image dimensions")
 
     original_height, original_width = original.shape[:2]
+    if original_width <= 0 or original_height <= 0:
+        raise InvalidImageDimensionsError("Invalid image dimensions")
     resized, resize_to_original = _resize_for_ocr(original)
 
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)

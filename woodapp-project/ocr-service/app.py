@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from preprocessing import decode_image
+from preprocessing import ImageDecodeError, InvalidImageDimensionsError, decode_image
 from scanner import RapidOcrScanner
 
 logger = logging.getLogger("woodapp-ocr")
@@ -54,11 +55,14 @@ def _http_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 
-async def read_and_decode_image(file: UploadFile) -> tuple[bytes, Any]:
+async def read_and_decode_image(file: UploadFile, timings: dict[str, float] | None = None) -> tuple[bytes, Any]:
     content_type = (file.content_type or "").lower().strip()
     extension = Path(file.filename or "").suffix.lower()
 
+    read_start = perf_counter()
     image_bytes = await file.read()
+    if timings is not None:
+        timings["upload_read_ms"] = (perf_counter() - read_start) * 1000
     logger.info(
         "received file bytes=%s filename_ext=%s content_type=%s",
         len(image_bytes),
@@ -72,11 +76,13 @@ async def read_and_decode_image(file: UploadFile) -> tuple[bytes, Any]:
         raise _http_error(400, "IMAGE_TOO_LARGE", "Uploaded image is too large")
 
     try:
-        image = decode_image(image_bytes)
-    except ValueError as exc:
+        image = decode_image(image_bytes, timings)
+    except ImageDecodeError as exc:
         raise _http_error(400, "IMAGE_DECODE_FAILED", "The uploaded file could not be decoded as a supported image.") from exc
+    except InvalidImageDimensionsError as exc:
+        raise _http_error(400, "INVALID_IMAGE_DIMENSIONS", "Uploaded image dimensions are invalid.") from exc
 
-    if image is None or len(image.shape) < 2:
+    if image is None or image.ndim not in (2, 3):
         raise _http_error(400, "IMAGE_DECODE_FAILED", "The uploaded file could not be decoded as a supported image.")
 
     height, width = image.shape[:2]
@@ -107,7 +113,7 @@ def load_model() -> None:
         OCR_ENGINE = None
         MODEL_READY = False
         MODEL_ERROR = _safe_error(exc)
-        logger.error("RapidOCR initialization failed: %s", MODEL_ERROR["errorType"])
+        logger.exception("RapidOCR initialization failed: %s", MODEL_ERROR["errorType"])
 
 
 @app.get("/health")
@@ -129,17 +135,57 @@ async def recognize(file: UploadFile = File(...)) -> dict:
     if not MODEL_READY or OCR_ENGINE is None:
         raise HTTPException(status_code=503, detail={"code": "MODEL_NOT_READY", "message": "OCR model is not ready"})
 
+    request_start = perf_counter()
+    timings: dict[str, float] = {
+        "upload_read_ms": 0.0,
+        "decode_ms": 0.0,
+        "orientation_ms": 0.0,
+        "preprocessing_ms": 0.0,
+        "full_page_ocr_ms": 0.0,
+        "candidate_detection_ms": 0.0,
+        "crop_ocr_ms": 0.0,
+        "serialization_ms": 0.0,
+    }
     try:
-        _, image = await read_and_decode_image(file)
-        return OCR_ENGINE.recognize_image(image)
+        _, image = await read_and_decode_image(file, timings)
+        payload = OCR_ENGINE.recognize_image(image)
+        diagnostics = payload.get("diagnostics", {}) if isinstance(payload, dict) else {}
+        serialization_start = perf_counter()
+        returned_detection_count = len(payload.get("detections", [])) if isinstance(payload, dict) else 0
+        timings["serialization_ms"] = (perf_counter() - serialization_start) * 1000
+        timings["preprocessing_ms"] = float(diagnostics.get("preprocessingMs", diagnostics.get("preprocessing_ms", timings["preprocessing_ms"])))
+        timings["full_page_ocr_ms"] = float(diagnostics.get("fullPageOcrMs", diagnostics.get("full_page_ocr_ms", timings["full_page_ocr_ms"])))
+        timings["candidate_detection_ms"] = float(diagnostics.get("candidateDetectionMs", diagnostics.get("candidate_detection_ms", timings["candidate_detection_ms"])))
+        timings["crop_ocr_ms"] = float(diagnostics.get("cropOcrMs", diagnostics.get("crop_ocr_ms", timings["crop_ocr_ms"])))
+        timings["total_ms"] = (perf_counter() - request_start) * 1000
+        logger.info(
+            "OCR request timings upload_read_ms=%.1f decode_ms=%.1f orientation_ms=%.1f preprocessing_ms=%.1f "
+            "full_page_ocr_ms=%.1f candidate_detection_ms=%.1f crop_ocr_ms=%.1f serialization_ms=%.1f total_ms=%.1f "
+            "image_width=%s image_height=%s candidate_count=%s rapidocr_box_count=%s returned_detection_count=%s",
+            timings["upload_read_ms"],
+            timings["decode_ms"],
+            timings["orientation_ms"],
+            timings["preprocessing_ms"],
+            timings["full_page_ocr_ms"],
+            timings["candidate_detection_ms"],
+            timings["crop_ocr_ms"],
+            timings["serialization_ms"],
+            timings["total_ms"],
+            payload.get("imageWidth") if isinstance(payload, dict) else "",
+            payload.get("imageHeight") if isinstance(payload, dict) else "",
+            diagnostics.get("candidateCount", 0),
+            diagnostics.get("recognizedCount", 0),
+            returned_detection_count,
+        )
+        return payload
     except HTTPException:
         raise
-    except ValueError as exc:
+    except (ImageDecodeError, InvalidImageDimensionsError, ValueError) as exc:
         logger.info("Invalid OCR image: %s", type(exc).__name__)
         raise _http_error(400, "IMAGE_DECODE_FAILED", "The uploaded file could not be decoded as a supported image.") from exc
     except Exception as exc:
         logger.exception("OCR processing failed: %s", type(exc).__name__)
         raise HTTPException(
             status_code=500,
-            detail={"code": "OCR_PROCESSING_FAILED", "message": "OCR processing failed"},
+            detail={"code": "OCR_PROCESSING_FAILED", "message": "Measurement detection failed."},
         ) from exc

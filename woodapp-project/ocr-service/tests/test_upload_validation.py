@@ -68,7 +68,7 @@ def test_upload_contract_accepts_generic_multipart_metadata_after_decode():
     assert '".png"' in APP_SOURCE
     assert '".webp"' in APP_SOURCE
     assert "read_and_decode_image" in APP_SOURCE
-    assert "decode_image(image_bytes)" in APP_SOURCE
+    assert "decode_image(image_bytes" in APP_SOURCE
 
 
 def test_upload_contract_has_distinct_validation_errors():

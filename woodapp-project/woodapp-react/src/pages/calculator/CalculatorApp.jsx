@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import '../../styles/calculator.css';
-import { API_BASE } from '../../config';
+import { API_BASE, API_ORIGIN } from '../../config';
 import { calcVolume, ftinToInches } from '../../utils/calc';
 import {
   calculateSelectedDetections,
@@ -337,12 +337,18 @@ export default function CalculatorApp() {
     try {
       await new Promise(resolve => setTimeout(resolve, 0));
       setScannerStage('detecting');
+      if (import.meta.env.DEV) {
+        console.debug('scanner API origin', API_ORIGIN);
+      }
       const res = await fetch(`${API_BASE}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body:    JSON.stringify({ imageBase64, mimeType, filename }),
       });
       const data = await res.json();
+      if (import.meta.env.DEV) {
+        console.debug('scanner HTTP status', res.status);
+      }
 
       if (!res.ok) {
         if (data.code === 'RATE_LIMIT')  { setScannerError('Daily scan limit reached (200/day). Resets at midnight UTC.'); setScannerStage('service-error'); setScreen('scanReview'); return; }

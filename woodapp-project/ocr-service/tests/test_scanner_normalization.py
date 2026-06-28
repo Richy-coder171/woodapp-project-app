@@ -1,8 +1,11 @@
 from scanner import (
     OcrLine,
+    RapidOcrResultFormatError,
     RapidOcrScanner,
+    adapt_rapidocr_result,
     _candidate_detections,
     _create_blue_ink_mask,
+    _crop_variants,
     _extract_lines,
     _group_components_into_lines,
     normalize_measurement_text,
@@ -72,6 +75,37 @@ def test_rapidocr_mapping_response_shape_is_extracted():
     assert lines[0].confidence == 0.81
 
 
+def test_rapidocr_39_output_object_shape_is_adapted_without_numpy_truth_test():
+    class RapidOCROutputLike:
+        boxes = np.array([
+            [[100, 110], [260, 110], [260, 152], [100, 152]],
+            [[100, 170], [262, 170], [262, 212], [100, 212]],
+        ], dtype=np.float32)
+        txts = ("4 x 12", "5 x 14")
+        scores = (np.float32(0.81), np.float32(0.74))
+
+    adapted = adapt_rapidocr_result(RapidOCROutputLike())
+
+    assert [item["text"] for item in adapted] == ["4 x 12", "5 x 14"]
+    assert adapted[0]["polygon"][0] == [100.0, 110.0]
+    assert isinstance(adapted[0]["confidence"], float)
+
+
+def test_unknown_rapidocr_result_shape_raises_safe_internal_error():
+    class UnknownOutput:
+        mystery = "value"
+
+    try:
+        adapt_rapidocr_result(UnknownOutput())
+    except RapidOcrResultFormatError as exc:
+        message = str(exc)
+        assert "UnknownOutput" in message
+        assert "mystery" in message
+        return
+
+    raise AssertionError("unknown RapidOCR result shape should raise")
+
+
 def test_split_ocr_pieces_are_joined_into_one_measurement():
     lines = [
         OcrLine(box(100, 120, 28, 40), "4", 0.82),
@@ -131,6 +165,50 @@ def test_opencv_fallback_activates_when_rapidocr_returns_zero():
     assert diagnostics["OpenCV region count"] == 5
     assert len(detections) == 5
     assert all(item["selected"] is True for item in detections)
+
+
+def test_empty_rapidocr_output_returns_http_safe_empty_detections():
+    class EmptyRapidOutput:
+        boxes = None
+        txts = None
+        scores = None
+
+    class EmptyOcr:
+        def __call__(self, image):
+            return EmptyRapidOutput()
+
+    scanner = RapidOcrScanner(ocr_engine=EmptyOcr())
+    payload = scanner.recognize(encode_jpeg(np.full((120, 160, 3), 255, dtype=np.uint8)))
+
+    assert payload["engine"] == "rapidocr-onnx"
+    assert payload["imageWidth"] == 160
+    assert payload["imageHeight"] == 120
+    assert payload["detections"] == []
+
+
+def test_rapidocr_is_called_with_numpy_image_array():
+    class CapturingOcr:
+        def __init__(self):
+            self.images = []
+
+        def __call__(self, image):
+            self.images.append(image)
+            return []
+
+    engine = CapturingOcr()
+    scanner = RapidOcrScanner(ocr_engine=engine)
+    scanner.recognize(encode_jpeg(np.full((120, 160, 3), 255, dtype=np.uint8)))
+
+    assert engine.images
+    assert isinstance(engine.images[0], np.ndarray)
+    assert engine.images[0].ndim == 3
+    assert engine.images[0].size > 0
+
+
+def test_empty_candidate_crops_are_skipped():
+    image = np.full((20, 20, 3), 255, dtype=np.uint8)
+
+    assert _crop_variants(image, {"x": 25, "y": 25, "width": 10, "height": 10}) == []
 
 
 def test_rapidocr_engine_is_reused_for_all_regions():

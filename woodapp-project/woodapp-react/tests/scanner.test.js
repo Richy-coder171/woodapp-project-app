@@ -177,6 +177,9 @@ test('scanner failure and ready states are mutually exclusive', () => {
   assert.match(appSource, /setScannerStage\('processing-error'\)/);
   assert.doesNotMatch(appSource, /setScannerStage\('Ready to select'\)/);
   assert.match(reviewSource, /const ready = !isDetecting && totalCount > 0 && scannerStage === 'ready'/);
+  assert.match(reviewSource, /const hasScannerError = Boolean\(scannerError\)/);
+  assert.match(reviewSource, /!\hasScannerError && \(/);
+  assert.match(reviewSource, /const actionsDisabled = !ready \|\| hasScannerError/);
 });
 
 test('frontend preserves scanner upload filename, mime type, and size diagnostics', () => {
@@ -185,4 +188,6 @@ test('frontend preserves scanner upload filename, mime type, and size diagnostic
   assert.match(appSource, /mimeType: photo\.mimeType/);
   assert.match(appSource, /size: file\.size/);
   assert.match(cameraSource, /wood-scan-\$\{Date\.now\(\)\}\.jpeg/);
+  assert.match(appSource, /scanner API origin/);
+  assert.match(appSource, /scanner HTTP status/);
 });

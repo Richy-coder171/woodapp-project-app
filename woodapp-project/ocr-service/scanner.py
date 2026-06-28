@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from layout import arrange_detections
-from preprocessing import PreparedImage, map_polygon_to_original, prepare_image
+from preprocessing import PreparedImage, map_polygon_to_original, prepare_decoded_image, prepare_image
 
 logger = logging.getLogger("woodapp-ocr")
 
@@ -734,6 +734,12 @@ class RapidOcrScanner:
 
     def recognize(self, image_bytes: bytes) -> dict:
         prepared = prepare_image(image_bytes)
+        return self.recognize_prepared(prepared)
+
+    def recognize_image(self, image: np.ndarray) -> dict:
+        return self.recognize_prepared(prepare_decoded_image(image))
+
+    def recognize_prepared(self, prepared: PreparedImage) -> dict:
         detections, diagnostics = self._detect(prepared)
         arranged = arrange_detections(detections, prepared.original_width, prepared.original_height)
         diagnostics["returned detections"] = len(arranged)

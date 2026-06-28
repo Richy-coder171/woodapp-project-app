@@ -14,7 +14,7 @@ def test_health_reports_rapidocr_engine_and_model_state():
 
 
 def test_invalid_images_return_400_and_model_not_ready_returns_503():
-    assert 'status_code=400' in APP_SOURCE
+    assert '_http_error(400' in APP_SOURCE
     assert 'INVALID_IMAGE' in APP_SOURCE
     assert 'status_code=503' in APP_SOURCE
     assert 'MODEL_NOT_READY' in APP_SOURCE

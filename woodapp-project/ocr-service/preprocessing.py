@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageOps
 
+Image.MAX_IMAGE_PIXELS = int(os.getenv("PIL_MAX_IMAGE_PIXELS", "80000000"))
+
 
 @dataclass
 class PreparedVariant:
@@ -192,8 +194,10 @@ def _threshold(gray: np.ndarray) -> np.ndarray:
     )
 
 
-def prepare_image(image_bytes: bytes) -> PreparedImage:
-    original = decode_image(image_bytes)
+def prepare_decoded_image(original: np.ndarray) -> PreparedImage:
+    if original is None or not hasattr(original, "shape") or len(original.shape) < 2:
+        raise ValueError("Invalid image")
+
     original_height, original_width = original.shape[:2]
     resized, resize_to_original = _resize_for_ocr(original)
 
@@ -235,6 +239,10 @@ def prepare_image(image_bytes: bytes) -> PreparedImage:
         original_height=original_height,
         variants=variants,
     )
+
+
+def prepare_image(image_bytes: bytes) -> PreparedImage:
+    return prepare_decoded_image(decode_image(image_bytes))
 
 
 def map_polygon_to_original(polygon: list[list[float]], to_original: np.ndarray) -> list[list[float]]:

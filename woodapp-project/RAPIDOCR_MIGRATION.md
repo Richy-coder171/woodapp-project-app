@@ -114,6 +114,18 @@ Node keeps using `POST /recognize` with multipart field `file`. Successful respo
 
 Timeout, service unavailable, processing failure, and invalid image errors are mapped separately.
 
+## Upload Validation
+
+The OCR service accepts valid `.jpg`, `.jpeg`, `.png`, and `.webp` uploads from Windows `curl.exe`, React, Android, and Node forwarding. Multipart metadata is treated as a hint only: `image/jpeg`, `image/jpg`, `image/png`, `image/webp`, `application/octet-stream`, and blank MIME values are accepted when the bytes decode successfully. The final authority is actual image decoding with Pillow plus EXIF orientation correction before OCR processing.
+
+Validation failures use distinct safe codes:
+
+- `EMPTY_IMAGE`
+- `IMAGE_DECODE_FAILED`
+- `IMAGE_TOO_LARGE`
+- `INVALID_IMAGE_DIMENSIONS`
+- `OCR_PROCESSING_FAILED`
+
 ## Android Testing
 
 Build/sync:

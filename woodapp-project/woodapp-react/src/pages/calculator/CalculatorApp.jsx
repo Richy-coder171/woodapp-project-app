@@ -86,6 +86,7 @@ export default function CalculatorApp() {
   const [capturedB64, setCapturedB64]     = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
   const [capturedMimeType, setCapturedMimeType] = useState('image/jpeg');
+  const [capturedFilename, setCapturedFilename] = useState('measurement.jpeg');
   const [detections, setDetections]       = useState([]);
   const [imageMeta, setImageMeta]         = useState({ width: 0, height: 0 });
   const [userScans, setUserScans]         = useState({ used: 0, limit: 200, remaining: 200 });
@@ -255,10 +256,11 @@ export default function CalculatorApp() {
     startCamera(newFacing);
   }
 
-  function handleCapture(b64, preview, mimeType = 'image/jpeg') {
+  function handleCapture(b64, preview, mimeType = 'image/jpeg', filename = 'measurement.jpeg') {
     setCapturedB64(b64);
     setCapturedPreview(preview);
     setCapturedMimeType(mimeType);
+    setCapturedFilename(filename);
     setDetections([]);
     setImageMeta({ width: 0, height: 0 });
     setScannerError('');
@@ -267,7 +269,7 @@ export default function CalculatorApp() {
     stopStream();
     setPreviewError('');
     setScreen('scanReview');
-    scanImage(b64, mimeType);
+    scanImage(b64, mimeType, filename);
   }
 
   function retake() {
@@ -301,14 +303,21 @@ export default function CalculatorApp() {
 
     try {
       const photo = await imageFileToUpload(file);
-      handleCapture(photo.base64, photo.preview, photo.mimeType);
+      if (import.meta.env.DEV) {
+        console.debug('scanner upload file', {
+          filename: photo.filename,
+          mimeType: photo.mimeType,
+          size: file.size,
+        });
+      }
+      handleCapture(photo.base64, photo.preview, photo.mimeType, photo.filename);
     } catch (err) {
       alert(err.message || 'Invalid image. Please try another photo.');
     }
   }
 
   /* Scan */
-  async function scanImage(imageBase64 = capturedB64, mimeType = capturedMimeType) {
+  async function scanImage(imageBase64 = capturedB64, mimeType = capturedMimeType, filename = capturedFilename) {
     if (!imageBase64) return;
 
     if (userScans.remaining <= 0) {
@@ -331,7 +340,7 @@ export default function CalculatorApp() {
       const res = await fetch(`${API_BASE}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-        body:    JSON.stringify({ imageBase64, mimeType }),
+        body:    JSON.stringify({ imageBase64, mimeType, filename }),
       });
       const data = await res.json();
 

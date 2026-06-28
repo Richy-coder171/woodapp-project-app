@@ -19,6 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const cssSource = fs.readFileSync(path.join(projectRoot, 'src/styles/calculator.css'), 'utf8');
 const appSource = fs.readFileSync(path.join(projectRoot, 'src/pages/calculator/CalculatorApp.jsx'), 'utf8');
+const cameraSource = fs.readFileSync(path.join(projectRoot, 'src/pages/calculator/components/CameraScreen.jsx'), 'utf8');
 const reviewSource = fs.readFileSync(path.join(projectRoot, 'src/pages/calculator/components/ScanReviewScreen.jsx'), 'utf8');
 const fixturePath = path.resolve(projectRoot, '../ocr-service/tests/fixtures/five-measurements.svg');
 
@@ -163,6 +164,7 @@ test('detection stores boxes and does not automatically calculate', () => {
   const scanBody = appSource.slice(scanStart, scanEnd);
 
   assert.match(scanBody, /const nextDetections = normalizeDetections\(data\.detections \|\| \[\]\)/);
+  assert.match(scanBody, /JSON\.stringify\(\{ imageBase64, mimeType, filename \}\)/);
   assert.match(scanBody, /setDetections\(nextDetections\)/);
   assert.doesNotMatch(scanBody, /setScreen\('results'\)/);
   assert.doesNotMatch(scanBody, /calculateSelected\(/);
@@ -175,4 +177,12 @@ test('scanner failure and ready states are mutually exclusive', () => {
   assert.match(appSource, /setScannerStage\('processing-error'\)/);
   assert.doesNotMatch(appSource, /setScannerStage\('Ready to select'\)/);
   assert.match(reviewSource, /const ready = !isDetecting && totalCount > 0 && scannerStage === 'ready'/);
+});
+
+test('frontend preserves scanner upload filename, mime type, and size diagnostics', () => {
+  assert.match(appSource, /capturedFilename/);
+  assert.match(appSource, /filename: photo\.filename/);
+  assert.match(appSource, /mimeType: photo\.mimeType/);
+  assert.match(appSource, /size: file\.size/);
+  assert.match(cameraSource, /wood-scan-\$\{Date\.now\(\)\}\.jpeg/);
 });

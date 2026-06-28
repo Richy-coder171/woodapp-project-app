@@ -289,7 +289,15 @@ const incrementScanCountAsync = (userId) =>
 
 const scansRemainingAfterPage = (limit) => Math.max(0, (limit.remaining || 0) - 1);
 
-const parseImagePayload = (imageBase64, mimeType = 'image/jpeg') => {
+const safeImageFilename = (filename = '', mimeType = 'image/jpeg') => {
+  const clean = String(filename || '').trim().replace(/[^\w.\- ()]/g, '').slice(0, 120);
+  if (/\.(jpe?g|png|webp)$/i.test(clean)) return clean;
+  if (mimeType === 'image/png') return 'measurement.png';
+  if (mimeType === 'image/webp') return 'measurement.webp';
+  return 'measurement.jpeg';
+};
+
+const parseImagePayload = (imageBase64, mimeType = 'image/jpeg', filename = '') => {
   const raw = String(imageBase64 || '').trim();
   const dataUrlMatch = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   const cleanBase64 = dataUrlMatch ? dataUrlMatch[2] : raw.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
@@ -310,7 +318,8 @@ const parseImagePayload = (imageBase64, mimeType = 'image/jpeg') => {
     throw err;
   }
 
-  return { buffer, mimeType: resolvedMimeType.startsWith('image/') ? resolvedMimeType : 'image/jpeg' };
+  const safeMimeType = resolvedMimeType.startsWith('image/') ? resolvedMimeType : 'image/jpeg';
+  return { buffer, mimeType: safeMimeType, filename: safeImageFilename(filename, safeMimeType) };
 };
 
 const safeJsonParse = (text) => {
@@ -380,13 +389,13 @@ const normalizeOcrResponse = (payload) => {
   };
 };
 
-const requestOcrRecognition = async ({ buffer, mimeType }) => {
+const requestOcrRecognition = async ({ buffer, mimeType, filename }) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
 
   try {
     const form = new FormData();
-    form.append('file', new Blob([buffer], { type: mimeType }), 'woodapp-scan.jpg');
+    form.append('file', new Blob([buffer], { type: mimeType || 'image/jpeg' }), filename || safeImageFilename('', mimeType));
 
     const response = await fetch(`${OCR_SERVICE_URL}/recognize`, {
       method: 'POST',
@@ -704,7 +713,7 @@ app.get('/api/payment/status', auth, (req, res) => {
 // ================= OCR SCAN ROUTE =================
 
 app.post('/api/scan', auth, async (req, res) => {
-  const { imageBase64, mimeType } = req.body;
+  const { imageBase64, mimeType, filename } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'Image required' });
@@ -732,7 +741,7 @@ app.post('/api/scan', auth, async (req, res) => {
     }
 
     try {
-      const image = parseImagePayload(imageBase64, mimeType);
+      const image = parseImagePayload(imageBase64, mimeType, filename);
       const ocr = await requestOcrRecognition(image);
       await incrementScanCountAsync(user.id);
 
@@ -756,11 +765,11 @@ app.post('/api/scan', auth, async (req, res) => {
 
 // ================= TEST ENDPOINT =================
 app.post('/api/test-scan', async (req, res) => {
-  const { imageBase64, mimeType } = req.body;
+  const { imageBase64, mimeType, filename } = req.body;
   if (!imageBase64) return res.status(400).json({ error: 'Image required' });
 
   try {
-    const image = parseImagePayload(imageBase64, mimeType);
+    const image = parseImagePayload(imageBase64, mimeType, filename);
     const ocr = await requestOcrRecognition(image);
     res.json({ success: true, scanner: 'rapidocr-onnx', ...ocr });
   } catch (err) {

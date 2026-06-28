@@ -4,6 +4,14 @@ Use this whenever your WiFi, hotspot, or PC network changes and the mobile app c
 
 For public internet deployment, use [DEPLOYMENT.md](DEPLOYMENT.md). This makes the app work from any network using a hosted HTTPS backend.
 
+## Scanner Update
+
+See [SCANNER_UPDATE.md](SCANNER_UPDATE.md) for the free multi-column OCR scanner setup, testing and deployment instructions.
+
+## Android Scanner Update
+
+See [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) for Android camera, Capacitor, scanner testing, and APK build instructions.
+
 ## What Changed
 
 - The app no longer keeps the backend IP directly inside the main config file.

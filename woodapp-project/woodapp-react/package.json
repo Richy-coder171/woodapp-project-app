@@ -2,6 +2,7 @@
   "name": "woodapp-react",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "network:update": "powershell -ExecutionPolicy Bypass -File ../scripts/update-network.ps1",
@@ -11,6 +12,7 @@
     "android:apk": "npm run build && npm run android:sync && cd android && gradlew.bat assembleDebug",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test tests/*.test.js",
     "cap:add:android": "npx cap add android",
     "cap:sync": "npx cap sync && npm run android:fix-java",
     "cap:open:android": "npx cap open android"

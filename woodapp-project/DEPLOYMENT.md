@@ -15,7 +15,25 @@ git push
 
 Never commit the real `backend/.env` file.
 
-## 2. Deploy The Backend
+## 2. Deploy The OCR Service
+
+Create a separate Render Web Service for PaddleOCR:
+
+```text
+Root Directory: woodapp-project/ocr-service
+Runtime: Docker
+Health Check Path: /health
+```
+
+After deployment, verify:
+
+```text
+https://your-ocr-service.onrender.com/health
+```
+
+The response should show `"status":"ok"` and `"modelLoaded":true`.
+
+## 3. Deploy The Backend
 
 Create a Render Web Service connected to the GitHub repository:
 
@@ -29,11 +47,11 @@ Health Check Path: /api/health
 
 Add the variables listed in `backend/.env.example` using Render's environment settings. Use the real secret values there.
 
-At least one of these is required:
+Set the OCR service URL to the separate Render OCR service:
 
-```text
-GEMINI_API_KEY
-GROQ_API_KEY
+```env
+OCR_SERVICE_URL=https://your-ocr-service.onrender.com
+OCR_TIMEOUT_MS=45000
 ```
 
 For the SQLite database, use a paid Render web service and add a persistent disk:
@@ -59,6 +77,10 @@ The health response must show:
 ```json
 {
   "status": "ok",
+  "scanner": {
+    "engine": "paddleocr",
+    "ocrServiceUrlConfigured": true
+  },
   "storage": {
     "dbPathConfigured": true,
     "persistenceMode": "configured-not-verified",
@@ -72,7 +94,7 @@ Even with `"status": "ok"`, confirm that a paid persistent disk is actually
 attached in the Render dashboard. The backend can verify `DB_PATH`, but it
 cannot verify Render billing or disk attachment.
 
-## 3. Deploy The Frontend
+## 4. Deploy The Frontend
 
 Create a Vercel project connected to the same GitHub repository:
 
@@ -91,7 +113,9 @@ VITE_API_ORIGIN=https://your-backend.onrender.com
 
 Do not include `/api` at the end. Redeploy the frontend after changing it.
 
-## 4. Build The Android App
+The Vercel frontend must call only the Node backend. Do not point the frontend at the OCR service.
+
+## 5. Build The Android App
 
 Create `woodapp-react/.env` from its example and set:
 
@@ -117,7 +141,8 @@ the public backend from any network even when the local `.env` file is missing.
 
 ## Production Notes
 
-- Keep all API keys in the backend host environment only.
+- Keep all secrets in backend and Render environment settings only.
 - Use strong values for `JWT_SECRET` and `ADMIN_KEY`.
-- Use HTTPS for both frontend and backend.
+- Use HTTPS for frontend, Node backend, and OCR service.
 - SQLite requires persistent storage. Consider Postgres when usage grows.
+- Test the OCR service and Node backend together in a Vercel preview before changing production traffic.

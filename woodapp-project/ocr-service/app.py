@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from preprocessing import ImageDecodeError, InvalidImageDimensionsError, decode_image
 from scanner import RapidOcrScanner
+from domain_scanner import DomainScanner
 
 logger = logging.getLogger("woodapp-ocr")
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = FastAPI(title="WoodApp OCR Service", version="2.0.0")
 OCR_ENGINE: RapidOcrScanner | None = None
+DOMAIN_ENGINE: DomainScanner | None = None
 MODEL_READY = False
 MODEL_ERROR: dict[str, str] | None = None
 
@@ -103,12 +105,13 @@ async def read_and_decode_image(file: UploadFile, timings: dict[str, float] | No
 
 @app.on_event("startup")
 def load_model() -> None:
-    global OCR_ENGINE, MODEL_READY, MODEL_ERROR
+    global OCR_ENGINE, DOMAIN_ENGINE, MODEL_READY, MODEL_ERROR
+    DOMAIN_ENGINE = DomainScanner()
     try:
         OCR_ENGINE = RapidOcrScanner()
         MODEL_READY = True
         MODEL_ERROR = None
-        logger.info("RapidOCR scanner loaded")
+        logger.info("RapidOCR scanner loaded; domain scanner ready")
     except Exception as exc:
         OCR_ENGINE = None
         MODEL_READY = False
@@ -161,7 +164,9 @@ async def recognize(file: UploadFile = File(...)) -> dict:
         logger.info(
             "OCR request timings upload_read_ms=%.1f decode_ms=%.1f orientation_ms=%.1f preprocessing_ms=%.1f "
             "full_page_ocr_ms=%.1f candidate_detection_ms=%.1f crop_ocr_ms=%.1f serialization_ms=%.1f total_ms=%.1f "
-            "image_width=%s image_height=%s candidate_count=%s rapidocr_box_count=%s returned_detection_count=%s",
+            "input_width=%s input_height=%s resized_width=%s resized_height=%s column_count=%s candidate_count=%s "
+            "full_page_ocr_calls=%s column_ocr_calls=%s crop_ocr_calls=%s fallback_ocr_calls=%s rapidocr_total_calls=%s "
+            "rapidocr_box_count=%s returned_detection_count=%s failed_column_count=%s status=%s",
             timings["upload_read_ms"],
             timings["decode_ms"],
             timings["orientation_ms"],
@@ -173,9 +178,19 @@ async def recognize(file: UploadFile = File(...)) -> dict:
             timings["total_ms"],
             payload.get("imageWidth") if isinstance(payload, dict) else "",
             payload.get("imageHeight") if isinstance(payload, dict) else "",
+            diagnostics.get("resizedWidth", 0),
+            diagnostics.get("resizedHeight", 0),
+            diagnostics.get("columnCount", 0),
             diagnostics.get("candidateCount", 0),
+            diagnostics.get("fullPageOcrCalls", 0),
+            diagnostics.get("columnOcrCalls", 0),
+            diagnostics.get("cropOcrCalls", 0),
+            diagnostics.get("fallbackOcrCalls", 0),
+            diagnostics.get("rapidocrTotalCalls", 0),
             diagnostics.get("recognizedCount", 0),
             returned_detection_count,
+            diagnostics.get("failedColumnCount", 0),
+            payload.get("status", "ok") if isinstance(payload, dict) else "",
         )
         return payload
     except HTTPException:
@@ -188,4 +203,42 @@ async def recognize(file: UploadFile = File(...)) -> dict:
         raise HTTPException(
             status_code=500,
             detail={"code": "OCR_PROCESSING_FAILED", "message": "Measurement detection failed."},
+        ) from exc
+
+
+@app.post("/recognize-domain")
+async def recognize_domain(file: UploadFile = File(...)) -> dict:
+    if DOMAIN_ENGINE is None:
+        raise HTTPException(status_code=503, detail={"code": "MODEL_NOT_READY", "message": "Domain scanner is not ready"})
+
+    request_start = perf_counter()
+    timings: dict[str, float] = {"upload_read_ms": 0.0, "decode_ms": 0.0, "orientation_ms": 0.0}
+    try:
+        _, image = await read_and_decode_image(file, timings)
+        payload = DOMAIN_ENGINE.recognize_image(image)
+        diagnostics = payload.get("diagnostics", {}) if isinstance(payload, dict) else {}
+        logger.info(
+            "Domain OCR request decode_ms=%.1f orientation_ms=%.1f total_ms=%.1f image_width=%s image_height=%s "
+            "detected_lines=%s recognized_valid=%s recognized_invalid=%s batches=%s",
+            timings["decode_ms"],
+            timings["orientation_ms"],
+            (perf_counter() - request_start) * 1000,
+            payload.get("imageWidth") if isinstance(payload, dict) else "",
+            payload.get("imageHeight") if isinstance(payload, dict) else "",
+            diagnostics.get("detectedLines", 0),
+            diagnostics.get("recognizedValid", 0),
+            diagnostics.get("recognizedInvalid", 0),
+            diagnostics.get("batches", 0),
+        )
+        return payload
+    except HTTPException:
+        raise
+    except (ImageDecodeError, InvalidImageDimensionsError, ValueError) as exc:
+        logger.info("Invalid domain OCR image: %s", type(exc).__name__)
+        raise _http_error(400, "IMAGE_DECODE_FAILED", "The uploaded file could not be decoded as a supported image.") from exc
+    except Exception as exc:
+        logger.exception("Domain OCR processing failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OCR_PROCESSING_FAILED", "message": "Domain measurement detection failed."},
         ) from exc

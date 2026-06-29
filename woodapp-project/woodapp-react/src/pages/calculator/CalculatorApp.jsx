@@ -343,7 +343,12 @@ export default function CalculatorApp() {
       const res = await fetch(`${API_BASE}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-        body:    JSON.stringify({ imageBase64, mimeType, filename }),
+        body:    JSON.stringify({
+          imageBase64,
+          mimeType,
+          filename,
+          scannerEngine: import.meta.env.DEV ? import.meta.env.VITE_SCANNER_ENGINE : undefined,
+        }),
       });
       const data = await res.json();
       if (import.meta.env.DEV) {
@@ -375,6 +380,10 @@ export default function CalculatorApp() {
       } else {
         setScannerStage('ready');
         setScannerError('');
+        if (data.status === 'partial') {
+          const failedCount = Array.isArray(data.failedColumns) ? data.failedColumns.length : 0;
+          setCalculationNotice(failedCount ? `${failedCount} area${failedCount === 1 ? '' : 's'} could not be read.` : 'Some areas could not be read.');
+        }
       }
     } catch (err) {
       setScannerError(err.message || 'Scan failed');

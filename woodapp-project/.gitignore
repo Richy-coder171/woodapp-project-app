@@ -16,6 +16,11 @@ __pycache__/
 *.log
 ocr-service/.venv/
 ocr-service/debug-output/
+datasets/woodapp_measurements/pages/
+datasets/woodapp_measurements/annotations/
+datasets/woodapp_measurements/crops/
+datasets/woodapp_measurements/manifests/
+models/
 *.sqlite-journal
 *.sqlite-shm
 *.sqlite-wal

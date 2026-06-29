@@ -164,7 +164,7 @@ test('detection stores boxes and does not automatically calculate', () => {
   const scanBody = appSource.slice(scanStart, scanEnd);
 
   assert.match(scanBody, /const nextDetections = normalizeDetections\(data\.detections \|\| \[\]\)/);
-  assert.match(scanBody, /JSON\.stringify\(\{ imageBase64, mimeType, filename \}\)/);
+  assert.match(scanBody, /scannerEngine: import\.meta\.env\.DEV \? import\.meta\.env\.VITE_SCANNER_ENGINE : undefined/);
   assert.match(scanBody, /setDetections\(nextDetections\)/);
   assert.doesNotMatch(scanBody, /setScreen\('results'\)/);
   assert.doesNotMatch(scanBody, /calculateSelected\(/);
@@ -180,6 +180,13 @@ test('scanner failure and ready states are mutually exclusive', () => {
   assert.match(reviewSource, /const hasScannerError = Boolean\(scannerError\)/);
   assert.match(reviewSource, /!\hasScannerError && \(/);
   assert.match(reviewSource, /const actionsDisabled = !ready \|\| hasScannerError/);
+});
+
+test('partial OCR results keep successful boxes ready for review', () => {
+  assert.match(appSource, /data\.status === 'partial'/);
+  assert.match(appSource, /setCalculationNotice\(failedCount \? `\$\{failedCount\} area/);
+  assert.match(appSource, /setScannerStage\('ready'\)/);
+  assert.match(appSource, /setDetections\(nextDetections\)/);
 });
 
 test('frontend preserves scanner upload filename, mime type, and size diagnostics', () => {

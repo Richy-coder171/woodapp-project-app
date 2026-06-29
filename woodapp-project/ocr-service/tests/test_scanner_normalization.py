@@ -10,6 +10,7 @@ from scanner import (
     _group_components_into_lines,
     normalize_measurement_text,
     parse_measurement,
+    detect_columns,
     detect_opencv_regions,
 )
 from preprocessing import prepare_image
@@ -39,6 +40,24 @@ def synthetic_five_line_image():
             3,
             cv2.LINE_AA,
         )
+    return image
+
+
+def synthetic_four_column_image(rows=12):
+    image = np.full((1200, 1000, 3), (248, 246, 238), dtype=np.uint8)
+    for column in range(4):
+        for row in range(rows):
+            text = f"{row + 4} x {12 + column}"
+            cv2.putText(
+                image,
+                text,
+                (45 + column * 235, 90 + row * 82),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (165, 86, 29),
+                2,
+                cv2.LINE_AA,
+            )
     return image
 
 
@@ -143,6 +162,83 @@ def test_five_line_fixture_returns_five_independent_detections():
     assert all(item["box"]["width"] > 0 and item["box"]["height"] > 0 for item in detections)
 
 
+def test_column_detection_returns_four_columns_for_dense_fixture():
+    columns, candidate_count = detect_columns(synthetic_four_column_image())
+
+    assert candidate_count >= 40
+    assert len(columns) == 4
+    assert [column.box["x"] for column in columns] == sorted(column.box["x"] for column in columns)
+
+
+def test_dense_four_column_processing_uses_column_ocr_not_row_ocr():
+    class ColumnOcr:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, image):
+            self.calls += 1
+            return {
+                "rec_texts": ["43", "x", "24"],
+                "rec_scores": [0.91, 0.88, 0.9],
+                "rec_polys": [box(10, 20, 34, 24), box(52, 20, 18, 24), box(82, 20, 42, 24)],
+            }
+
+    engine = ColumnOcr()
+    scanner = RapidOcrScanner(ocr_engine=engine)
+    payload = scanner.recognize(encode_jpeg(synthetic_four_column_image()))
+
+    assert engine.calls == 4
+    assert payload["diagnostics"]["columnCount"] == 4
+    assert payload["diagnostics"]["columnOcrCalls"] == 4
+    assert payload["diagnostics"]["rapidocrTotalCalls"] == 4
+    assert payload["diagnostics"]["rapidocrTotalCalls"] < 12 * 4
+    assert len(payload["detections"]) == 4
+    assert all(item["normalizedText"] == "43 x 24" for item in payload["detections"])
+
+
+def test_failed_column_returns_successful_partial_results():
+    class PartlyFailingOcr:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, image):
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("synthetic column failure")
+            return {
+                "rec_texts": ["4 x 12"],
+                "rec_scores": [0.8],
+                "rec_polys": [box(12, 18, 90, 28)],
+            }
+
+    scanner = RapidOcrScanner(ocr_engine=PartlyFailingOcr())
+    payload = scanner.recognize(encode_jpeg(synthetic_four_column_image()))
+
+    assert payload["status"] == "partial"
+    assert payload["failedColumns"] == [1]
+    assert payload["diagnostics"]["failedColumnCount"] == 1
+    assert len(payload["detections"]) == 3
+
+
+def test_original_coordinate_mapping_survives_column_crop_offset():
+    class OneColumnOcr:
+        def __call__(self, image):
+            return {
+                "rec_texts": ["4 x 12"],
+                "rec_scores": [0.8],
+                "rec_polys": [box(10, 20, 80, 24)],
+            }
+
+    scanner = RapidOcrScanner(ocr_engine=OneColumnOcr())
+    payload = scanner.recognize(encode_jpeg(synthetic_four_column_image(rows=2)))
+
+    assert payload["detections"]
+    assert payload["detections"][0]["box"]["x"] >= 0
+    assert payload["detections"][0]["box"]["y"] >= 0
+    assert payload["detections"][0]["box"]["x"] < payload["imageWidth"]
+    assert payload["detections"][0]["box"]["y"] < payload["imageHeight"]
+
+
 def test_opencv_five_line_fixture_produces_ordered_regions():
     regions, _ = detect_opencv_regions(synthetic_five_line_image())
 
@@ -169,8 +265,8 @@ def test_opencv_fallback_activates_when_rapidocr_returns_zero():
     detections, diagnostics = scanner._detect(prepared)
 
     assert diagnostics["OpenCV region count"] == 5
-    assert len(detections) == 5
-    assert all(item["selected"] is True for item in detections)
+    assert diagnostics["rapidocr_total_calls"] == 1
+    assert len(detections) == 0
 
 
 def test_empty_rapidocr_output_returns_http_safe_empty_detections():
@@ -207,7 +303,7 @@ def test_default_scanner_runs_single_full_page_ocr_pass_without_heavy_fallbacks(
 
     assert engine.calls == 1
     assert payload["detections"] == []
-    assert payload["diagnostics"]["candidateCount"] == 0
+    assert payload["diagnostics"]["candidateCount"] == 5
 
 
 def test_rapidocr_is_called_with_numpy_image_array():
@@ -253,7 +349,8 @@ def test_rapidocr_engine_is_reused_for_all_regions():
     assert engine.calls >= 1
     assert scanner.ocr is engine
     assert diagnostics["OpenCV region count"] == 5
-    assert len(detections) == 5
+    assert diagnostics["rapidocr_total_calls"] == 1
+    assert len(detections) == 0
 
 
 def test_four_column_grouping_stays_separate():

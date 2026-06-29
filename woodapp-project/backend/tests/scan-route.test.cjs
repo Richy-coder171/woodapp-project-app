@@ -7,7 +7,10 @@ const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'u
 
 test('scan route uses the OCR service endpoint', () => {
   assert.match(serverSource, /OCR_SERVICE_URL/);
+  assert.match(serverSource, /DOMAIN_OCR_SERVICE_URL/);
+  assert.match(serverSource, /SCANNER_ENGINE/);
   assert.match(serverSource, /\/recognize/);
+  assert.match(serverSource, /\/recognize-domain/);
   assert.match(serverSource, /scanner: 'rapidocr-onnx'/);
 });
 
@@ -26,6 +29,9 @@ test('one uploaded page increments the daily scan count once', () => {
 
 test('scan route returns detections instead of calculated entries', () => {
   assert.match(serverSource, /detections: ocr\.detections/);
+  assert.match(serverSource, /status: ocr\.status/);
+  assert.match(serverSource, /failedColumns: ocr\.failedColumns/);
+  assert.match(serverSource, /diagnostics: ocr\.diagnostics/);
   assert.doesNotMatch(serverSource, /entries: parsed\.entries/);
 });
 

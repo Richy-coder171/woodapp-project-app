@@ -21,6 +21,11 @@ SEPARATOR_RE = re.compile(r"\s*(?:x|X|\*|times|by)\s*")
 MEASUREMENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)", re.I)
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 FALLBACK_MIN_DETECTIONS = 5
+MAX_COLUMNS = int(os.getenv("MAX_COLUMNS", "6"))
+MAX_DETECTIONS = int(os.getenv("MAX_DETECTIONS", "80"))
+MAX_FALLBACK_CROPS = int(os.getenv("MAX_FALLBACK_CROPS", "8"))
+MAX_OCR_VARIANTS = int(os.getenv("MAX_OCR_VARIANTS", "2"))
+MAX_PROCESSING_SIDE = int(os.getenv("MAX_PROCESSING_SIDE", os.getenv("OCR_MAX_SIDE", "2000")))
 DEBUG_OUTPUT_DIR = Path(__file__).resolve().parent / "debug-output"
 SAVE_DEBUG_OUTPUT = os.getenv("WOODAPP_OCR_DEBUG", "").lower() in {"1", "true", "yes"}
 
@@ -41,6 +46,12 @@ class OcrLine:
 
 @dataclass
 class RegionBox:
+    box: dict
+    source: str = "opencv"
+
+
+@dataclass
+class ColumnBox:
     box: dict
     source: str = "opencv"
 
@@ -549,6 +560,79 @@ def detect_opencv_regions(image: np.ndarray) -> tuple[list[RegionBox], dict[str,
     return [RegionBox(box=box) for box in line_boxes], debug
 
 
+def _clamp_rect(box: dict, image_width: int, image_height: int) -> dict | None:
+    x1 = max(0, int(round(float(box.get("x", 0)))))
+    y1 = max(0, int(round(float(box.get("y", 0)))))
+    x2 = min(image_width, int(round(float(box.get("x", 0)) + float(box.get("width", 0)))))
+    y2 = min(image_height, int(round(float(box.get("y", 0)) + float(box.get("height", 0)))))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return {"x": float(x1), "y": float(y1), "width": float(x2 - x1), "height": float(y2 - y1)}
+
+
+def _column_gap_threshold(regions: list[RegionBox], image_width: int) -> float:
+    widths = sorted(max(1.0, float(region.box["width"])) for region in regions)
+    if not widths:
+        return image_width * 0.18
+    median_width = widths[len(widths) // 2]
+    return max(image_width * 0.055, median_width * 0.9)
+
+
+def detect_columns(image: np.ndarray, max_columns: int = MAX_COLUMNS) -> tuple[list[ColumnBox], int]:
+    height, width = image.shape[:2]
+    regions, _ = detect_opencv_regions(image)
+    useful = [
+        region
+        for region in regions
+        if float(region.box["width"]) > max(8, width * 0.015)
+        and float(region.box["height"]) > max(6, height * 0.004)
+    ]
+    if not useful:
+        return [ColumnBox({"x": 0.0, "y": 0.0, "width": float(width), "height": float(height)}, "full-page")], 0
+
+    useful.sort(key=lambda region: _box_center_x(region.box))
+    threshold = _column_gap_threshold(useful, width)
+    columns: list[list[RegionBox]] = []
+
+    for region in useful:
+        center = _box_center_x(region.box)
+        if not columns:
+            columns.append([region])
+            continue
+        previous = columns[-1]
+        previous_center = sum(_box_center_x(item.box) for item in previous) / len(previous)
+        if abs(center - previous_center) > threshold:
+            columns.append([region])
+        else:
+            previous.append(region)
+
+    while len(columns) > max_columns:
+        centers = [sum(_box_center_x(item.box) for item in column) / len(column) for column in columns]
+        nearest = min(range(len(centers) - 1), key=lambda index: centers[index + 1] - centers[index])
+        columns[nearest].extend(columns[nearest + 1])
+        del columns[nearest + 1]
+
+    pad_x = max(8.0, width * 0.02)
+    pad_y = max(6.0, height * 0.01)
+    column_boxes: list[ColumnBox] = []
+    for column in columns[:max_columns]:
+        union = _union_box([region.box for region in column])
+        expanded = {
+            "x": union["x"] - pad_x,
+            "y": union["y"] - pad_y,
+            "width": union["width"] + pad_x * 2,
+            "height": union["height"] + pad_y * 2,
+        }
+        clamped = _clamp_rect(expanded, width, height)
+        if clamped and clamped["width"] >= 8 and clamped["height"] >= 8:
+            column_boxes.append(ColumnBox(clamped))
+
+    if not column_boxes:
+        return [ColumnBox({"x": 0.0, "y": 0.0, "width": float(width), "height": float(height)}, "full-page")], len(regions)
+    column_boxes.sort(key=lambda column: column.box["x"])
+    return column_boxes, len(regions)
+
+
 def _save_debug_artifacts(debug_images: dict[str, np.ndarray]) -> None:
     if not SAVE_DEBUG_OUTPUT:
         return
@@ -843,13 +927,27 @@ class RapidOcrScanner:
             "imageWidth": prepared.original_width,
             "imageHeight": prepared.original_height,
             "engine": self.engine,
+            "status": "partial" if diagnostics.get("failed_columns") and arranged else "ok",
+            "failedColumns": list(diagnostics.get("failed_columns", [])),
             "detections": arranged,
             "diagnostics": {
                 "candidateCount": int(diagnostics.get("OpenCV region count", 0)),
                 "recognizedCount": int(diagnostics.get("OCR extracted text count", 0)),
                 "returnedCount": len(arranged),
+                "columnCount": int(diagnostics.get("column_count", 0)),
+                "fullPageOcrCalls": int(diagnostics.get("full_page_ocr_calls", 0)),
+                "columnOcrCalls": int(diagnostics.get("column_ocr_calls", 0)),
+                "cropOcrCalls": int(diagnostics.get("crop_ocr_calls", 0)),
+                "fallbackOcrCalls": int(diagnostics.get("fallback_ocr_calls", 0)),
+                "rapidocrTotalCalls": int(diagnostics.get("rapidocr_total_calls", 0)),
+                "failedColumnCount": len(diagnostics.get("failed_columns", [])),
+                "resizedWidth": int(diagnostics.get("resized_width", 0)),
+                "resizedHeight": int(diagnostics.get("resized_height", 0)),
                 "preprocessingMs": int(diagnostics.get("preprocessing_ms", 0)),
                 "fullPageOcrMs": int(diagnostics.get("full_page_ocr_ms", 0)),
+                "columnDetectionMs": int(diagnostics.get("column_detection_ms", 0)),
+                "ocrMs": int(diagnostics.get("ocr_ms", 0)),
+                "groupingMs": int(diagnostics.get("grouping_ms", 0)),
                 "candidateDetectionMs": int(diagnostics.get("candidate_detection_ms", 0)),
                 "cropOcrMs": int(diagnostics.get("crop_ocr_ms", 0)),
             },
@@ -864,47 +962,100 @@ class RapidOcrScanner:
             "OCR extracted text count": 0,
             "OpenCV region count": 0,
             "plausible measurement count": 0,
+            "column_count": 0,
+            "full_page_ocr_calls": 0,
+            "column_ocr_calls": 0,
+            "crop_ocr_calls": 0,
+            "fallback_ocr_calls": 0,
+            "rapidocr_total_calls": 0,
+            "failed_columns": [],
         }
 
-        variants = prepared.variants[:1]
-        fallback_variants = prepared.variants[1:]
+        variant = prepared.variants[0]
+        diagnostics["processed image size"] = f"{variant.image.shape[1]}x{variant.image.shape[0]}"
+        diagnostics["resized_width"] = int(variant.image.shape[1])
+        diagnostics["resized_height"] = int(variant.image.shape[0])
 
-        full_page_start = perf_counter()
-        for variant in variants:
-            diagnostics["processed image size"] = f"{variant.image.shape[1]}x{variant.image.shape[0]}"
-            variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
-            diagnostics["OCR raw result count"] += raw_count
-            diagnostics["OCR extracted text count"] += line_count
-            diagnostics[f"{variant.name} OCR boxes"] = line_count
-            diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
-            all_detections = _dedupe_detections(all_detections, variant_detections)
-        diagnostics["full_page_ocr_ms"] = int((perf_counter() - full_page_start) * 1000)
+        column_start = perf_counter()
+        columns, candidate_count = detect_columns(variant.image, MAX_COLUMNS)
+        diagnostics["column_detection_ms"] = int((perf_counter() - column_start) * 1000)
+        diagnostics["column_count"] = len(columns)
+        diagnostics["OpenCV region count"] = candidate_count
 
-        preprocessing_start = perf_counter()
-        if self.use_fallback_variants and len(all_detections) < FALLBACK_MIN_DETECTIONS:
-            for variant in fallback_variants:
-                variant_detections, line_count, raw_count = self._detect_variant(prepared, variant)
+        ocr_start = perf_counter()
+        for column_index, column in enumerate(columns[:MAX_COLUMNS]):
+            try:
+                detections, line_count, raw_count, used_full_page = self._detect_column(prepared, variant, column, column_index)
                 diagnostics["OCR raw result count"] += raw_count
                 diagnostics["OCR extracted text count"] += line_count
-                diagnostics[f"{variant.name} OCR boxes"] = line_count
-                diagnostics[f"{variant.name} parsed detections"] = len(variant_detections)
-                all_detections = _dedupe_detections(all_detections, variant_detections)
-        diagnostics["preprocessing_ms"] = int((perf_counter() - preprocessing_start) * 1000)
+                diagnostics["rapidocr_total_calls"] += 1
+                if used_full_page:
+                    diagnostics["full_page_ocr_calls"] += 1
+                else:
+                    diagnostics["column_ocr_calls"] += 1
+                all_detections = _dedupe_detections(all_detections, detections)
+                if len(all_detections) >= MAX_DETECTIONS:
+                    all_detections = all_detections[:MAX_DETECTIONS]
+                    break
+            except Exception:
+                logger.exception("Column OCR failed", extra={"columnIndex": column_index})
+                diagnostics["failed_columns"].append(column_index)
+        diagnostics["ocr_ms"] = int((perf_counter() - ocr_start) * 1000)
+        diagnostics["full_page_ocr_ms"] = diagnostics["ocr_ms"] if diagnostics["full_page_ocr_calls"] else 0
+        diagnostics["preprocessing_ms"] = diagnostics["column_detection_ms"]
+        diagnostics["candidate_detection_ms"] = diagnostics["column_detection_ms"]
+        diagnostics["crop_ocr_ms"] = 0
 
-        candidate_start = perf_counter()
-        if self.use_opencv_fallback and len(all_detections) < FALLBACK_MIN_DETECTIONS:
-            region_detections, region_count, region_raw_count, region_text_count = self._detect_opencv_fallback(prepared)
-            diagnostics["OpenCV region count"] = region_count
-            diagnostics["OCR raw result count"] += region_raw_count
-            diagnostics["OCR extracted text count"] += region_text_count
-            diagnostics["opencv parsed detections"] = len(region_detections)
-            all_detections = _dedupe_detections(all_detections, region_detections)
-        diagnostics["candidate_detection_ms"] = int((perf_counter() - candidate_start) * 1000)
-        diagnostics["crop_ocr_ms"] = diagnostics.get("candidate_detection_ms", 0)
+        if not all_detections and diagnostics["failed_columns"]:
+            raise RuntimeError("All column OCR attempts failed")
 
         diagnostics["parsed detections"] = len(all_detections)
         diagnostics["plausible measurement count"] = len(all_detections)
         return all_detections, diagnostics
+
+    def _detect_column(
+        self,
+        prepared: PreparedImage,
+        variant: Any,
+        column: ColumnBox,
+        column_index: int,
+    ) -> tuple[list[dict], int, int, bool]:
+        image_height, image_width = variant.image.shape[:2]
+        clamped = _clamp_rect(column.box, image_width, image_height)
+        if clamped is None:
+            return [], 0, 0, column.source == "full-page"
+
+        x1 = int(clamped["x"])
+        y1 = int(clamped["y"])
+        x2 = int(clamped["x"] + clamped["width"])
+        y2 = int(clamped["y"] + clamped["height"])
+        crop = variant.image[y1:y2, x1:x2]
+        if crop.size == 0 or crop.ndim not in (2, 3) or crop.shape[0] <= 0 or crop.shape[1] <= 0:
+            return [], 0, 0, column.source == "full-page"
+        if crop.dtype != np.uint8:
+            crop = crop.astype(np.uint8)
+
+        result = _run_ocr(self.ocr, crop)
+        raw_count = _raw_result_count(result)
+        try:
+            adapted = adapt_rapidocr_result(result)
+        except RapidOcrResultFormatError as exc:
+            raise RuntimeError(f"Unexpected RapidOCR response shape for column {column_index}: {exc}") from exc
+
+        mapped_lines = []
+        for item in adapted:
+            shifted_polygon = [[point[0] + x1, point[1] + y1] for point in item["polygon"]]
+            mapped_lines.append(
+                OcrLine(
+                    polygon=map_polygon_to_original(shifted_polygon, variant.to_original),
+                    text=item["text"],
+                    confidence=item["confidence"],
+                )
+            )
+        detections = _candidate_detections(mapped_lines, prepared.original_width, prepared.original_height)
+        for detection in detections:
+            detection["columnIndex"] = column_index
+        return detections, len(adapted), raw_count, column.source == "full-page"
 
     def _detect_variant(self, prepared: PreparedImage, variant: Any) -> tuple[list[dict], int, int]:
         result = _run_ocr(self.ocr, variant.image)

@@ -96,6 +96,19 @@ test('select all and clear all update selected state', () => {
   assert.equal(selected.every(item => item.selected === true), true);
 });
 
+test('invalid scanner detections stay grey and unselected', () => {
+  const normalized = normalizeDetections([
+    { id: 'valid', rawText: '43x24', normalizedText: '43x24', valid: true, selected: false },
+    { id: 'invalid', rawText: '43?24', normalizedText: null, valid: false, selected: true },
+  ]);
+  assert.equal(normalized[0].selected, false);
+  assert.equal(normalized[1].selected, false);
+  assert.equal(getMeasurementBoxClass(normalized[1]), 'measurement-box unselected');
+  assert.equal(toggleMeasurement(normalized, 'invalid')[1].selected, false);
+  assert.deepEqual(selectAllMeasurements(normalized).map(item => item.selected), [true, false]);
+  assert.equal(calculateSelectedDetections(selectAllMeasurements(normalized)).entries.length, 1);
+});
+
 test('five-line fixture detections are selected and calculate selected only', () => {
   assert.equal(fs.existsSync(fixturePath), true);
   const normalized = normalizeDetections(fiveDetections);

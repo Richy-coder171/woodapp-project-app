@@ -6,6 +6,7 @@ import { calcVolume, ftinToInches } from '../../utils/calc';
 import {
   calculateSelectedDetections,
   normalizeDetections,
+  selectAllMeasurements,
   toggleMeasurement as toggleMeasurementItem,
 } from '../../utils/scanSelection.js';
 
@@ -405,9 +406,7 @@ export default function CalculatorApp() {
   }
 
   const selectAll = () => {
-    setDetections((items) =>
-      items.map((item) => ({ ...item, selected: true }))
-    );
+    setDetections((items) => selectAllMeasurements(items));
     setCalculationNotice('');
   };
 

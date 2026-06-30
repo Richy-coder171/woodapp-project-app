@@ -247,7 +247,7 @@ async def recognize(file: UploadFile = File(...)) -> dict:
         logger.exception("OCR processing failed: %s", type(exc).__name__)
         raise HTTPException(
             status_code=500,
-            detail={"code": "OCR_PROCESSING_FAILED", "message": "Measurement detection failed."},
+            detail={"code": "OCR_PROCESSING_FAILED", "message": "OCR processing failed. Please try again."},
         ) from exc
 
 

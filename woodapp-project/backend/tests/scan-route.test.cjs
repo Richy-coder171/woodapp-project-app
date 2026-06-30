@@ -8,10 +8,13 @@ const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'u
 test('scan route uses the OCR service endpoint', () => {
   assert.match(serverSource, /OCR_SERVICE_URL/);
   assert.match(serverSource, /DOMAIN_OCR_SERVICE_URL/);
+  assert.match(serverSource, /NVIDIA_OCR_SERVICE_URL/);
+  assert.match(serverSource, /NVIDIA_OCR_TIMEOUT_MS/);
   assert.match(serverSource, /SCANNER_ENGINE/);
   assert.match(serverSource, /\/recognize/);
   assert.match(serverSource, /\/recognize-domain/);
-  assert.match(serverSource, /scanner: 'rapidocr-onnx'/);
+  assert.match(serverSource, /\/recognize-nvidia/);
+  assert.match(serverSource, /nvidia-tao-ocdnet-ocrnet-v1/);
 });
 
 test('Gemini and Groq are removed from the backend scanner path', () => {

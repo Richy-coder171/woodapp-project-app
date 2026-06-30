@@ -37,8 +37,10 @@ const SUBSCRIPTION_AMOUNT_INR = readPositiveNumber(process.env.SUBSCRIPTION_AMOU
 const SUBSCRIPTION_AMOUNT_PAISE = Math.round(SUBSCRIPTION_AMOUNT_INR * 100);
 const OCR_SERVICE_URL = String(process.env.OCR_SERVICE_URL || 'http://localhost:8000').trim().replace(/\/+$/, '');
 const DOMAIN_OCR_SERVICE_URL = String(process.env.DOMAIN_OCR_SERVICE_URL || OCR_SERVICE_URL).trim().replace(/\/+$/, '');
+const NVIDIA_OCR_SERVICE_URL = String(process.env.NVIDIA_OCR_SERVICE_URL || OCR_SERVICE_URL).trim().replace(/\/+$/, '');
 const SCANNER_ENGINE = String(process.env.SCANNER_ENGINE || 'rapidocr').trim().toLowerCase();
 const OCR_TIMEOUT_MS = readPositiveInt(process.env.OCR_TIMEOUT_MS, 45000);
+const NVIDIA_OCR_TIMEOUT_MS = readPositiveInt(process.env.NVIDIA_OCR_TIMEOUT_MS, 180000);
 
 const DAILY_SCAN_LIMIT = 200;
 
@@ -380,6 +382,7 @@ const normalizeOcrResponse = (payload) => {
       rawText: String(item.rawText || ''),
       normalizedText: String(item.normalizedText || item.rawText || ''),
       confidence: Number.isFinite(Number(item.confidence)) ? Number(item.confidence) : 0,
+      valid: item.valid !== false,
       selected: item.selected !== false,
       columnIndex: Number.isFinite(Number(item.columnIndex)) ? Number(item.columnIndex) : 0,
       rowIndex: Number.isFinite(Number(item.rowIndex)) ? Number(item.rowIndex) : index,
@@ -397,15 +400,16 @@ const normalizeOcrResponse = (payload) => {
 
 const requestOcrRecognition = async ({ buffer, mimeType, filename, scannerEngine }) => {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
+  const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
+  const timeoutMs = effectiveEngine === 'nvidia' ? NVIDIA_OCR_TIMEOUT_MS : OCR_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const form = new FormData();
     form.append('file', new Blob([buffer], { type: mimeType || 'image/jpeg' }), filename || safeImageFilename('', mimeType));
 
-    const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
-    const scannerUrl = effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL;
-    const scannerPath = effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize';
+    const scannerUrl = effectiveEngine === 'nvidia' ? NVIDIA_OCR_SERVICE_URL : (effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL);
+    const scannerPath = effectiveEngine === 'nvidia' ? '/recognize-nvidia' : (effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize');
     const response = await fetch(`${scannerUrl}${scannerPath}`, {
       method: 'POST',
       body: form,
@@ -757,7 +761,7 @@ app.post('/api/scan', auth, async (req, res) => {
 
       res.json({
         success: true,
-        scanner: 'rapidocr-onnx',
+        scanner: SCANNER_ENGINE === 'nvidia' ? 'nvidia-tao-ocdnet-ocrnet-v1' : 'rapidocr-onnx',
         status: ocr.status,
         imageWidth: ocr.imageWidth,
         imageHeight: ocr.imageHeight,
@@ -785,7 +789,7 @@ app.post('/api/test-scan', async (req, res) => {
     const image = parseImagePayload(imageBase64, mimeType, filename);
     image.scannerEngine = scannerEngine;
     const ocr = await requestOcrRecognition(image);
-    res.json({ success: true, scanner: 'rapidocr-onnx', ...ocr });
+    res.json({ success: true, scanner: SCANNER_ENGINE === 'nvidia' ? 'nvidia-tao-ocdnet-ocrnet-v1' : 'rapidocr-onnx', ...ocr });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message, code: err.code || 'OCR_FAILED' });
   }
@@ -1019,9 +1023,11 @@ app.get('/api/health', (req, res) => {
         : null
     },
     scanner: {
-      engine: 'rapidocr-onnx',
+      engine: SCANNER_ENGINE,
       ocrServiceUrlConfigured: Boolean(OCR_SERVICE_URL),
-      timeoutMs: OCR_TIMEOUT_MS
+      nvidiaOcrServiceUrlConfigured: Boolean(NVIDIA_OCR_SERVICE_URL),
+      timeoutMs: OCR_TIMEOUT_MS,
+      nvidiaTimeoutMs: NVIDIA_OCR_TIMEOUT_MS
     }
   });
 });
@@ -1029,7 +1035,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'WoodApp API', version: '1.0.0',
-    scanner: 'rapidocr-onnx',
+    scanner: SCANNER_ENGINE,
     endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/payment/request','POST /api/payment/submit-utr','GET /api/payment/status','POST /api/scan','POST /api/test-scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/admin/payments','POST /api/admin/payments/:id/approve','POST /api/admin/payments/:id/reject','GET /api/health']
   });
 });

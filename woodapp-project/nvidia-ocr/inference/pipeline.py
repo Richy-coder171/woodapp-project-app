@@ -1,16 +1,42 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 import os
 from pathlib import Path
+import sys
 from time import perf_counter
 
 import cv2
 import numpy as np
 
-from ocdnet_runtime import DetectedMeasurement, MeasurementDetector, NvidiaModelNotReady, OcdnetOnnxDetector, box_from_polygon, sort_and_limit_detections
-from ocrnet_runtime import MeasurementRecognizer, OcrnetOnnxRecognizer, RecognitionResult
-from preprocessing import map_points_to_original, prepare_image
+
+def _load_sibling(module_name: str, filename: str):
+    path = Path(__file__).with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_ocdnet = _load_sibling("woodapp_nvidia_ocdnet_runtime", "ocdnet_runtime.py")
+_ocrnet = _load_sibling("woodapp_nvidia_ocrnet_runtime", "ocrnet_runtime.py")
+_preprocessing = _load_sibling("woodapp_nvidia_preprocessing", "preprocessing.py")
+
+DetectedMeasurement = _ocdnet.DetectedMeasurement
+MeasurementDetector = _ocdnet.MeasurementDetector
+NvidiaModelNotReady = _ocdnet.NvidiaModelNotReady
+OcdnetOnnxDetector = _ocdnet.OcdnetOnnxDetector
+box_from_polygon = _ocdnet.box_from_polygon
+sort_and_limit_detections = _ocdnet.sort_and_limit_detections
+MeasurementRecognizer = _ocrnet.MeasurementRecognizer
+OcrnetOnnxRecognizer = _ocrnet.OcrnetOnnxRecognizer
+RecognitionResult = _ocrnet.RecognitionResult
+map_points_to_original = _preprocessing.map_points_to_original
+prepare_image = _preprocessing.prepare_image
 
 
 ENGINE = "nvidia-tao-ocdnet-ocrnet-v1"

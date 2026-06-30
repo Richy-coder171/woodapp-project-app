@@ -43,14 +43,14 @@ class OcrnetOnnxRecognizer:
         self.vocabulary = vocabulary
         self.batch_size = batch_size
         if not self.model_path.exists():
-            from ocdnet_runtime import NvidiaModelNotReady
-
             raise NvidiaModelNotReady("The NVIDIA measurement recognizer model has not been installed.")
         import onnxruntime as ort
 
         self.session = ort.InferenceSession(str(self.model_path), providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
 
     def recognize_batch(self, crops: list[np.ndarray]) -> list[RecognitionResult]:
-        from ocdnet_runtime import NvidiaModelNotReady
-
         raise NvidiaModelNotReady("OCRNet output decoding must be wired to the verified exported TAO model format.")
+
+
+class NvidiaModelNotReady(RuntimeError):
+    pass

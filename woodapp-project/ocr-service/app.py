@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+import importlib.util
 from pathlib import Path
+import sys
 from time import perf_counter
 from typing import Any
 
@@ -34,6 +36,8 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 app = FastAPI(title="WoodApp OCR Service", version="2.0.0")
 OCR_ENGINE: RapidOcrScanner | None = None
 DOMAIN_ENGINE: DomainScanner | None = None
+NVIDIA_ENGINE: Any | None = None
+NVIDIA_MODEL_NOT_READY: type[Exception] | None = None
 MODEL_READY = False
 MODEL_ERROR: dict[str, str] | None = None
 
@@ -55,6 +59,19 @@ def _safe_error(exc: Exception) -> dict[str, str]:
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def _load_nvidia_pipeline() -> tuple[Any, type[Exception] | None]:
+    pipeline_path = Path(__file__).resolve().parents[1] / "nvidia-ocr" / "inference" / "pipeline.py"
+    if not pipeline_path.exists():
+        return None, None
+    spec = importlib.util.spec_from_file_location("woodapp_nvidia_pipeline", pipeline_path)
+    if spec is None or spec.loader is None:
+        return None, None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["woodapp_nvidia_pipeline"] = module
+    spec.loader.exec_module(module)
+    return module.NvidiaPipeline(), getattr(module, "NvidiaModelNotReady", None)
 
 
 async def read_and_decode_image(file: UploadFile, timings: dict[str, float] | None = None) -> tuple[bytes, Any]:
@@ -105,8 +122,15 @@ async def read_and_decode_image(file: UploadFile, timings: dict[str, float] | No
 
 @app.on_event("startup")
 def load_model() -> None:
-    global OCR_ENGINE, DOMAIN_ENGINE, MODEL_READY, MODEL_ERROR
+    global OCR_ENGINE, DOMAIN_ENGINE, NVIDIA_ENGINE, NVIDIA_MODEL_NOT_READY, MODEL_READY, MODEL_ERROR
     DOMAIN_ENGINE = DomainScanner()
+    try:
+        NVIDIA_ENGINE, NVIDIA_MODEL_NOT_READY = _load_nvidia_pipeline()
+        logger.info("NVIDIA OCR pipeline initialized status=%s", NVIDIA_ENGINE.health().get("status") if NVIDIA_ENGINE else "unavailable")
+    except Exception as exc:
+        NVIDIA_ENGINE = None
+        NVIDIA_MODEL_NOT_READY = None
+        logger.exception("NVIDIA OCR pipeline initialization failed: %s", type(exc).__name__)
     try:
         OCR_ENGINE = RapidOcrScanner()
         MODEL_READY = True
@@ -131,6 +155,27 @@ def health() -> Any:
         "errorType": (MODEL_ERROR or {}).get("errorType", "MODEL_NOT_READY"),
     }
     return JSONResponse(status_code=503, content=payload)
+
+
+@app.get("/nvidia-health")
+def nvidia_health() -> Any:
+    if NVIDIA_ENGINE is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "engine": "nvidia-tao-ocdnet-ocrnet-v1",
+                "detectorModelLoaded": False,
+                "recognizerModelLoaded": False,
+                "runtimeBackend": "none",
+                "cudaAvailable": False,
+                "tensorRtAvailable": False,
+                "onnxRuntimeAvailable": False,
+            },
+        )
+    status = NVIDIA_ENGINE.health()
+    code = 200 if status.get("status") == "ok" else 503
+    return JSONResponse(status_code=code, content=status)
 
 
 @app.post("/recognize")
@@ -241,4 +286,43 @@ async def recognize_domain(file: UploadFile = File(...)) -> dict:
         raise HTTPException(
             status_code=500,
             detail={"code": "OCR_PROCESSING_FAILED", "message": "Domain measurement detection failed."},
+        ) from exc
+
+
+@app.post("/recognize-nvidia")
+async def recognize_nvidia(file: UploadFile = File(...)) -> dict:
+    if NVIDIA_ENGINE is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement model has not been installed."},
+        )
+
+    timings: dict[str, float] = {"upload_read_ms": 0.0, "decode_ms": 0.0, "orientation_ms": 0.0}
+    try:
+        _, image = await read_and_decode_image(file, timings)
+        payload = NVIDIA_ENGINE.recognize_image(image)
+        summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+        logger.info(
+            "NVIDIA OCR request decode_ms=%.1f orientation_ms=%.1f detected=%s valid=%s invalid=%s batches=%s total_ms=%s",
+            timings["decode_ms"],
+            timings["orientation_ms"],
+            summary.get("detected", 0),
+            summary.get("valid", 0),
+            summary.get("invalid", 0),
+            summary.get("batches", 0),
+            summary.get("totalMs", 0),
+        )
+        return payload
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if NVIDIA_MODEL_NOT_READY is not None and isinstance(exc, NVIDIA_MODEL_NOT_READY):
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement model has not been installed."},
+            ) from exc
+        logger.exception("NVIDIA OCR processing failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OCR_PROCESSING_FAILED", "message": "NVIDIA OCR processing failed. Please try again."},
         ) from exc

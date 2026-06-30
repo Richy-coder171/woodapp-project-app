@@ -1,0 +1,10 @@
+# Verify with `tao model ocrnet export --help`.
+model:
+  checkpoint: nvidia-ocr/models/checkpoints/ocrnet/best
+dataset:
+  dictionary: nvidia-ocr/dictionaries/woodapp_characters.txt
+export:
+  output_file: nvidia-ocr/models/exported/ocrnet.onnx
+  input_height: 48
+  max_input_width: 320
+  batch_size: 1

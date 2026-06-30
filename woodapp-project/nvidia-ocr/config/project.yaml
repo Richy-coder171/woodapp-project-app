@@ -1,0 +1,21 @@
+project:
+  name: woodapp-nvidia-ocr
+  engine: nvidia-tao-ocdnet-ocrnet-v1
+  random_seed: 42
+  max_columns: 6
+  max_detections: 100
+  max_label_length: 16
+  vocabulary: "0123456789x."
+runtime:
+  max_image_side: 2200
+  max_upload_bytes: 15728640
+  max_processing_seconds: 180
+  max_batch_size: 16
+  low_confidence_threshold: 0.75
+  preferred_backend: onnxruntime
+preprocessing:
+  perspective_correction: optional
+  deskew: true
+  shadow_reduction: true
+  preserve_blue_ink: true
+  preserve_black_ink: true

@@ -1,0 +1,8 @@
+# Verify with `tao model ocdnet evaluate --help`.
+model:
+  checkpoint: nvidia-ocr/models/checkpoints/ocdnet/best
+dataset:
+  validation_dataset_dir: nvidia-ocr/data/tao-ocdnet/validation
+evaluate:
+  batch_size: 4
+  output_dir: nvidia-ocr/reports/ocdnet-evaluate

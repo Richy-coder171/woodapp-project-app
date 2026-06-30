@@ -36,6 +36,8 @@ const SUBSCRIPTION_DAYS = readPositiveInt(process.env.SUBSCRIPTION_DAYS, 30);
 const SUBSCRIPTION_AMOUNT_INR = readPositiveNumber(process.env.SUBSCRIPTION_AMOUNT_INR, 499);
 const SUBSCRIPTION_AMOUNT_PAISE = Math.round(SUBSCRIPTION_AMOUNT_INR * 100);
 const OCR_SERVICE_URL = String(process.env.OCR_SERVICE_URL || 'http://localhost:8000').trim().replace(/\/+$/, '');
+const DOMAIN_OCR_SERVICE_URL = String(process.env.DOMAIN_OCR_SERVICE_URL || OCR_SERVICE_URL).trim().replace(/\/+$/, '');
+const SCANNER_ENGINE = String(process.env.SCANNER_ENGINE || 'rapidocr').trim().toLowerCase();
 const OCR_TIMEOUT_MS = readPositiveInt(process.env.OCR_TIMEOUT_MS, 45000);
 
 const DAILY_SCAN_LIMIT = 200;
@@ -365,10 +367,14 @@ const normalizeOcrResponse = (payload) => {
   const imageWidth = Number(payload?.imageWidth || 0);
   const imageHeight = Number(payload?.imageHeight || 0);
   const detections = Array.isArray(payload?.detections) ? payload.detections : [];
+  const failedColumns = Array.isArray(payload?.failedColumns) ? payload.failedColumns : [];
 
   return {
+    status: payload?.status === 'partial' ? 'partial' : 'ok',
     imageWidth,
     imageHeight,
+    failedColumns,
+    diagnostics: payload?.diagnostics && typeof payload.diagnostics === 'object' ? payload.diagnostics : {},
     detections: detections.map((item, index) => ({
       id: String(item.id || `measurement-${index + 1}`),
       rawText: String(item.rawText || ''),
@@ -389,7 +395,7 @@ const normalizeOcrResponse = (payload) => {
   };
 };
 
-const requestOcrRecognition = async ({ buffer, mimeType, filename }) => {
+const requestOcrRecognition = async ({ buffer, mimeType, filename, scannerEngine }) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
 
@@ -397,7 +403,10 @@ const requestOcrRecognition = async ({ buffer, mimeType, filename }) => {
     const form = new FormData();
     form.append('file', new Blob([buffer], { type: mimeType || 'image/jpeg' }), filename || safeImageFilename('', mimeType));
 
-    const response = await fetch(`${OCR_SERVICE_URL}/recognize`, {
+    const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
+    const scannerUrl = effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL;
+    const scannerPath = effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize';
+    const response = await fetch(`${scannerUrl}${scannerPath}`, {
       method: 'POST',
       body: form,
       signal: controller.signal
@@ -713,7 +722,7 @@ app.get('/api/payment/status', auth, (req, res) => {
 // ================= OCR SCAN ROUTE =================
 
 app.post('/api/scan', auth, async (req, res) => {
-  const { imageBase64, mimeType, filename } = req.body;
+  const { imageBase64, mimeType, filename, scannerEngine } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'Image required' });
@@ -742,14 +751,18 @@ app.post('/api/scan', auth, async (req, res) => {
 
     try {
       const image = parseImagePayload(imageBase64, mimeType, filename);
+      image.scannerEngine = scannerEngine;
       const ocr = await requestOcrRecognition(image);
       await incrementScanCountAsync(user.id);
 
       res.json({
         success: true,
         scanner: 'rapidocr-onnx',
+        status: ocr.status,
         imageWidth: ocr.imageWidth,
         imageHeight: ocr.imageHeight,
+        failedColumns: ocr.failedColumns,
+        diagnostics: ocr.diagnostics,
         detections: ocr.detections,
         scansRemaining: scansRemainingAfterPage(limit)
       });
@@ -765,11 +778,12 @@ app.post('/api/scan', auth, async (req, res) => {
 
 // ================= TEST ENDPOINT =================
 app.post('/api/test-scan', async (req, res) => {
-  const { imageBase64, mimeType, filename } = req.body;
+  const { imageBase64, mimeType, filename, scannerEngine } = req.body;
   if (!imageBase64) return res.status(400).json({ error: 'Image required' });
 
   try {
     const image = parseImagePayload(imageBase64, mimeType, filename);
+    image.scannerEngine = scannerEngine;
     const ocr = await requestOcrRecognition(image);
     res.json({ success: true, scanner: 'rapidocr-onnx', ...ocr });
   } catch (err) {

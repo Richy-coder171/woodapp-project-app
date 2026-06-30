@@ -1,0 +1,8 @@
+# Verify with `tao model ocdnet inference --help`.
+model:
+  checkpoint: nvidia-ocr/models/checkpoints/ocdnet/best
+inference:
+  input_dir: nvidia-ocr/data/source-pages
+  output_dir: nvidia-ocr/reports/ocdnet-inference
+  confidence_threshold: 0.35
+  polygon_threshold: 0.3

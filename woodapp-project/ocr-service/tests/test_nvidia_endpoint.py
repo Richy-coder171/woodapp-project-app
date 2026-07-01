@@ -33,6 +33,8 @@ def test_nvidia_health_reports_missing_models() -> None:
     response = client.get("/nvidia-health")
     assert response.status_code == 503
     assert response.json()["detectorModelLoaded"] is False
+    assert response.json()["runtimeBackend"] == "onnx"
+    assert response.json()["reason"] in {"MODEL_FILES_MISSING", "ONNX_RUNTIME_NOT_INSTALLED"}
 
 
 def test_recognize_nvidia_missing_models_returns_safe_error() -> None:
@@ -48,3 +50,4 @@ def test_recognize_nvidia_missing_models_returns_safe_error() -> None:
     response = client.post("/recognize-nvidia", files={"file": ("measurement.jpg", BytesIO(_jpeg()), "image/jpeg")})
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "NVIDIA_MODEL_NOT_READY"
+    assert response.json()["detail"]["message"] == "The NVIDIA measurement models are not installed."

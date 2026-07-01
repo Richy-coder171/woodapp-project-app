@@ -18,6 +18,7 @@ from export_ocdnet_dataset import export_ocdnet_dataset  # noqa: E402
 from export_ocrnet_dataset import export_ocrnet_dataset  # noqa: E402
 from grammar import is_supported_label, normalize_label  # noqa: E402
 from split_dataset import split_dataset  # noqa: E402
+from validate_dataset import validate_dataset  # noqa: E402
 from ocdnet_runtime import DetectedMeasurement, box_from_polygon, sort_and_limit_detections  # noqa: E402
 from ocrnet_runtime import RecognitionResult, greedy_ctc_decode  # noqa: E402
 
@@ -81,6 +82,17 @@ def test_dataset_converters_create_outputs(tmp_path: Path) -> None:
     assert (tmp_path / "crops" / "page-001_measurement-0001.png").exists()
 
 
+def test_dataset_validator_reports_missing_source_images(tmp_path: Path) -> None:
+    annotations = tmp_path / "annotations"
+    pages = tmp_path / "source-pages"
+    annotations.mkdir()
+    pages.mkdir()
+    (annotations / "page-001.json").write_text(json.dumps(page()), encoding="utf-8")
+    report = validate_dataset(annotations, pages)
+    assert report["missingImages"] == 1
+    assert any(issue["code"] == "missing_image_file" for issue in report["issues"])
+
+
 def test_runtime_helpers_sort_decode_and_box() -> None:
     detections = [
         DetectedMeasurement([[80, 30], [100, 30], [100, 40], [80, 40]], 0.9),
@@ -91,3 +103,11 @@ def test_runtime_helpers_sort_decode_and_box() -> None:
     assert box_from_polygon(ordered[0].polygon, 200, 100)["width"] == 30
     assert greedy_ctc_decode([0, 5, 5, 0, 4, 11], "0123456789x.") == "43x"
     assert RecognitionResult("43X24", "43x24", 0.95, True).valid
+
+
+def test_private_data_and_models_are_ignored_by_git() -> None:
+    root_ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    project_ignore = (ROOT.parent / ".gitignore").read_text(encoding="utf-8")
+    assert "data/source-pages/**" in root_ignore
+    assert "models/exported/**" in root_ignore
+    assert "ocr-service/models/nvidia/*.onnx" in project_ignore

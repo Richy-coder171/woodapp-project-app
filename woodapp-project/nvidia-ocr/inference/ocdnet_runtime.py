@@ -21,21 +21,28 @@ class MeasurementDetector(Protocol):
 
 
 class NvidiaModelNotReady(RuntimeError):
-    pass
+    def __init__(self, code: str = "NVIDIA_MODEL_NOT_READY", message: str = "The NVIDIA measurement models are not installed.") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class OcdnetOnnxDetector:
-    def __init__(self, model_path: str | Path, confidence_threshold: float = 0.35) -> None:
-        self.model_path = Path(model_path)
+    def __init__(self, model_path: str | Path | None = None, confidence_threshold: float = 0.35, session_info: object | None = None) -> None:
+        self.model_path = Path(model_path) if model_path is not None else None
         self.confidence_threshold = confidence_threshold
-        if not self.model_path.exists():
-            raise NvidiaModelNotReady("The NVIDIA measurement detector model has not been installed.")
+        if session_info is not None:
+            self.session_info = session_info
+            self.session = session_info.session
+            return
+        if self.model_path is None or not self.model_path.exists():
+            raise NvidiaModelNotReady("DETECTOR_MODEL_MISSING")
         import onnxruntime as ort
 
-        self.session = ort.InferenceSession(str(self.model_path), providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.session = ort.InferenceSession(str(self.model_path), providers=["CPUExecutionProvider"])
+        self.session_info = None
 
     def detect(self, image: np.ndarray) -> list[DetectedMeasurement]:
-        raise NvidiaModelNotReady("OCDNet output decoding must be wired to the verified exported TAO model format.")
+        raise NvidiaModelNotReady("MODEL_OUTPUT_UNSUPPORTED", "OCDNet output decoding must be wired to the verified exported TAO model format.")
 
 
 def box_from_polygon(polygon: list[list[float]], image_width: int, image_height: int) -> dict:

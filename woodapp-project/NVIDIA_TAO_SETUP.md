@@ -16,3 +16,5 @@ bash nvidia-ocr/scripts/preflight.sh
 The preflight checks GPU, WSL, Docker, Docker GPU readiness, Python, disk space, RAM, and TAO command availability. It writes `nvidia-ocr/PREFLIGHT_REPORT.md`.
 
 Do not install drivers or accept NVIDIA licenses automatically from this repo. Acquire compatible official pretrained models only after confirming the installed TAO version and command help.
+
+Render deployment is CPU inference only. The OCR service Docker image uses `python:3.11-slim` and `onnxruntime==1.20.1`, which is the pinned CPU ONNX Runtime dependency for the production container. Do not install `onnxruntime-gpu`, CUDA packages, or TensorRT packages on Render CPU.

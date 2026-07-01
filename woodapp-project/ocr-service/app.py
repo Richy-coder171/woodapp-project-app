@@ -294,7 +294,7 @@ async def recognize_nvidia(file: UploadFile = File(...)) -> dict:
     if NVIDIA_ENGINE is None:
         raise HTTPException(
             status_code=503,
-            detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement model has not been installed."},
+            detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement models are not installed."},
         )
 
     timings: dict[str, float] = {"upload_read_ms": 0.0, "decode_ms": 0.0, "orientation_ms": 0.0}
@@ -319,7 +319,7 @@ async def recognize_nvidia(file: UploadFile = File(...)) -> dict:
         if NVIDIA_MODEL_NOT_READY is not None and isinstance(exc, NVIDIA_MODEL_NOT_READY):
             raise HTTPException(
                 status_code=503,
-                detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement model has not been installed."},
+                detail={"code": "NVIDIA_MODEL_NOT_READY", "message": "The NVIDIA measurement models are not installed."},
             ) from exc
         logger.exception("NVIDIA OCR processing failed: %s", type(exc).__name__)
         raise HTTPException(

@@ -10,6 +10,15 @@ streamlit run app.py
 
 Place private page photos in `nvidia-ocr/data/source-pages/`. These files are ignored by Git.
 
+Workflow:
+
+- Click `Propose Boxes` to generate starting boxes from the current OpenCV detector.
+- Use the table to edit `x`, `y`, `width`, and `height`; this moves and resizes boxes.
+- Click `Add Box` for a missed measurement.
+- Check `Delete` on rows that are wrong.
+- Enter the corrected normalized text for each measurement.
+- Click `Save Annotation` when all labels are valid.
+
 Boxing rules:
 
 - Draw one rectangle around one complete measurement expression, for example `43 x 24`.

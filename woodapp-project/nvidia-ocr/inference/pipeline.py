@@ -25,10 +25,11 @@ def _load_sibling(module_name: str, filename: str):
 _ocdnet = _load_sibling("woodapp_nvidia_ocdnet_runtime", "ocdnet_runtime.py")
 _ocrnet = _load_sibling("woodapp_nvidia_ocrnet_runtime", "ocrnet_runtime.py")
 _preprocessing = _load_sibling("woodapp_nvidia_preprocessing", "preprocessing.py")
+_loader = _load_sibling("woodapp_nvidia_model_loader", "model_loader.py")
 
 DetectedMeasurement = _ocdnet.DetectedMeasurement
 MeasurementDetector = _ocdnet.MeasurementDetector
-NvidiaModelNotReady = _ocdnet.NvidiaModelNotReady
+NvidiaModelNotReady = _loader.NvidiaModelNotReady
 OcdnetOnnxDetector = _ocdnet.OcdnetOnnxDetector
 box_from_polygon = _ocdnet.box_from_polygon
 sort_and_limit_detections = _ocdnet.sort_and_limit_detections
@@ -37,6 +38,8 @@ OcrnetOnnxRecognizer = _ocrnet.OcrnetOnnxRecognizer
 RecognitionResult = _ocrnet.RecognitionResult
 map_points_to_original = _preprocessing.map_points_to_original
 prepare_image = _preprocessing.prepare_image
+NvidiaModelLoader = _loader.NvidiaModelLoader
+safe_metadata = _loader.safe_metadata
 
 
 ENGINE = "nvidia-tao-ocdnet-ocrnet-v1"
@@ -46,43 +49,30 @@ ENGINE = "nvidia-tao-ocdnet-ocrnet-v1"
 class NvidiaPipeline:
     detector: MeasurementDetector | None = None
     recognizer: MeasurementRecognizer | None = None
-    detector_model: Path = Path("nvidia-ocr/models/exported/ocdnet.onnx")
-    recognizer_model: Path = Path("nvidia-ocr/models/exported/ocrnet.onnx")
-    max_detections: int = int(os.getenv("NVIDIA_OCR_MAX_DETECTIONS", "100"))
-    batch_size: int = int(os.getenv("NVIDIA_OCR_BATCH_SIZE", "16"))
-    low_confidence_threshold: float = float(os.getenv("NVIDIA_OCR_LOW_CONFIDENCE_THRESHOLD", "0.75"))
+    model_loader: object | None = None
+    max_detections: int = int(os.getenv("NVIDIA_MAX_DETECTIONS", os.getenv("NVIDIA_OCR_MAX_DETECTIONS", "100")))
+    batch_size: int = int(os.getenv("NVIDIA_RECOGNITION_BATCH_SIZE", os.getenv("NVIDIA_OCR_BATCH_SIZE", "16")))
+    low_confidence_threshold: float = float(os.getenv("NVIDIA_MIN_CONFIDENCE", os.getenv("NVIDIA_OCR_LOW_CONFIDENCE_THRESHOLD", "0.70")))
 
     def __post_init__(self) -> None:
-        if self.detector is None and self.detector_model.exists():
-            self.detector = OcdnetOnnxDetector(self.detector_model)
-        if self.recognizer is None and self.recognizer_model.exists():
-            self.recognizer = OcrnetOnnxRecognizer(self.recognizer_model, batch_size=self.batch_size)
+        if self.model_loader is None:
+            self.model_loader = NvidiaModelLoader()
+        bundle = self.model_loader.load_once()
+        if bundle.ready:
+            if self.detector is None:
+                self.detector = OcdnetOnnxDetector(confidence_threshold=self.low_confidence_threshold, session_info=bundle.detector)
+            if self.recognizer is None:
+                self.recognizer = OcrnetOnnxRecognizer(vocabulary=bundle.dictionary, batch_size=self.batch_size, session_info=bundle.recognizer)
 
     def health(self) -> dict:
-        try:
-            import onnxruntime as ort
-            onnx_available = True
-            providers = ort.get_available_providers()
-            cuda_available = "CUDAExecutionProvider" in providers
-        except Exception:
-            onnx_available = False
-            providers = []
-            cuda_available = False
-        return {
-            "status": "ok" if self.detector and self.recognizer else "model_not_ready",
-            "engine": ENGINE,
-            "detectorModelLoaded": self.detector is not None,
-            "recognizerModelLoaded": self.recognizer is not None,
-            "runtimeBackend": "onnxruntime",
-            "cudaAvailable": cuda_available,
-            "tensorRtAvailable": False,
-            "onnxRuntimeAvailable": onnx_available,
-            "providers": providers,
-        }
+        return self.model_loader.health()
 
     def recognize_image(self, image: np.ndarray) -> dict:
-        if self.detector is None or self.recognizer is None:
-            raise NvidiaModelNotReady("The NVIDIA measurement model has not been installed.")
+        bundle = self.model_loader.require_ready()
+        if self.detector is None:
+            self.detector = OcdnetOnnxDetector(confidence_threshold=self.low_confidence_threshold, session_info=bundle.detector)
+        if self.recognizer is None:
+            self.recognizer = OcrnetOnnxRecognizer(vocabulary=bundle.dictionary, batch_size=self.batch_size, session_info=bundle.recognizer)
         start = perf_counter()
         prepared = prepare_image(image)
         detected = sort_and_limit_detections(self.detector.detect(prepared.processed), self.max_detections)

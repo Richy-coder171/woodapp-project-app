@@ -14,6 +14,7 @@ The current production scanner is still RapidOCR. The NVIDIA path is opt-in thro
 SCANNER_ENGINE=nvidia
 NVIDIA_OCR_SERVICE_URL=http://localhost:8000
 NVIDIA_OCR_TIMEOUT_MS=180000
+NVIDIA_FALLBACK_TO_RAPIDOCR=false
 ```
 
 Training is not started automatically. Real training requires labelled private data, verified TAO CLI commands, official compatible pretrained checkpoints, and NVIDIA GPU/Docker readiness.
@@ -33,4 +34,13 @@ WSL/Linux:
 bash nvidia-ocr/scripts/woodapp-nvidia.sh preflight
 bash nvidia-ocr/scripts/woodapp-nvidia.sh train-detector
 bash nvidia-ocr/scripts/woodapp-nvidia.sh train-recognizer
+```
+
+Install exported ONNX models:
+
+```powershell
+python nvidia-ocr\scripts\install_exported_models.py `
+  --detector D:\models\woodapp-ocdnet.onnx `
+  --recognizer D:\models\woodapp-ocrnet.onnx `
+  --dictionary D:\models\woodapp_characters.txt
 ```

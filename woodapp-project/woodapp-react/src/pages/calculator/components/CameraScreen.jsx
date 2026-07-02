@@ -18,7 +18,7 @@ export default function CameraScreen({ streamRef, facing, setFacing, handleCaptu
     canvas.getContext('2d').drawImage(v, 0, 0);
     const b64     = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
     const preview = canvas.toDataURL('image/jpeg', 0.7);
-    handleCapture(b64, preview);
+    handleCapture(b64, preview, 'image/jpeg', `wood-scan-${Date.now()}.jpeg`);
   }
 
   function flipCam() {

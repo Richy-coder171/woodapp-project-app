@@ -97,13 +97,37 @@ def export_crops(page: dict, image: Image.Image) -> int:
 
 
 def propose_rows(image: Image.Image) -> list[dict]:
+    bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    try:
+        from domain_scanner.line_detector import detect_measurement_lines
+
+        lines, diagnostics = detect_measurement_lines(bgr, max_measurements=100)
+        rows = []
+        for index, line in enumerate(lines):
+            box = line.to_dict()
+            if float(box["width"]) < 55 or float(box["height"]) < 18:
+                continue
+            rows.append({
+                "delete": False,
+                "id": f"measurement-{len(rows) + 1:04d}",
+                "x": round(float(box["x"]), 2),
+                "y": round(float(box["y"]), 2),
+                "width": round(float(box["width"]), 2),
+                "height": round(float(box["height"]), 2),
+                "text": "",
+            })
+        if rows:
+            st.caption(f"Proposed {len(rows)} boxes using dense line detector.")
+            return rows
+    except Exception as exc:
+        st.warning(f"Dense line proposal failed: {type(exc).__name__}")
+
     try:
         from scanner import detect_opencv_regions
 
-        bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         regions, _ = detect_opencv_regions(bgr)
     except Exception as exc:
-        st.warning(f"OpenCV proposal failed: {type(exc).__name__}")
+        st.warning(f"Fallback OpenCV proposal failed: {type(exc).__name__}")
         return []
     rows = []
     for index, region in enumerate(regions[:100]):

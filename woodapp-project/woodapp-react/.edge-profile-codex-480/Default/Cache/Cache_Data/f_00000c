@@ -1,0 +1,243 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/pages/calculator/components/SubScreen.jsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=a2127b28"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+var _s = $RefreshSig$();
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=a2127b28"; const useState = __vite__cjsImport3_react["useState"];
+export default function SubScreen({ subStatus, validateSession, authToken, logout }) {
+  _s();
+  const [loading, setLoading] = useState(false);
+  async function checkSubscription() {
+    setLoading(true);
+    await validateSession(authToken);
+    setLoading(false);
+  }
+  return /* @__PURE__ */ jsxDEV("div", { className: "screen sub-screen", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "sub-hero", children: [
+      /* @__PURE__ */ jsxDEV("span", { className: "eyebrow", children: "Subscription gate" }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 34,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("h2", { children: subStatus.title }, void 0, false, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 35,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+      lineNumber: 33,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "sub-card", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "o" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 40,
+            columnNumber: 39
+          }, this),
+          "Status"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 40,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: `sub-value ${subStatus.cls}`, children: subStatus.status }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 41,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 39,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "$" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 44,
+            columnNumber: 39
+          }, this),
+          "Plan"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 44,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-value", children: "$4.99 / 30 days" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 45,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 43,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "#" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 48,
+            columnNumber: 39
+          }, this),
+          "Daily Scans"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 48,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-value", children: "200 per day" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 49,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 47,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "%" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 52,
+            columnNumber: 39
+          }, this),
+          "Payment"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 52,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-value", children: "PayPal / Bank Transfer" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 53,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 51,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "*" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 56,
+            columnNumber: 39
+          }, this),
+          "Activation"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 56,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-value", children: "Within 1 hour" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 57,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 55,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "sub-row", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-label", children: [
+          /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "@" }, void 0, false, {
+            fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+            lineNumber: 60,
+            columnNumber: 39
+          }, this),
+          "Contact"
+        ] }, void 0, true, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 60,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "sub-value", children: "your-email@example.com" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 61,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 59,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+      lineNumber: 38,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "sub-actions", children: [
+      /* @__PURE__ */ jsxDEV("button", { className: "btn-primary", onClick: checkSubscription, disabled: loading, children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: loading ? "..." : "?" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 67,
+          columnNumber: 11
+        }, this),
+        loading ? "Checking..." : "Check Status"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 66,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("button", { className: "btn-secondary", onClick: logout, children: [
+        /* @__PURE__ */ jsxDEV("i", { "aria-hidden": "true", children: "<" }, void 0, false, {
+          fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+          lineNumber: 71,
+          columnNumber: 11
+        }, this),
+        "Sign Out"
+      ] }, void 0, true, {
+        fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+        lineNumber: 70,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+      lineNumber: 65,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx",
+    lineNumber: 32,
+    columnNumber: 5
+  }, this);
+}
+_s(SubScreen, "/Rjh5rPqCCqf0XYnTUk9ZNavw3Q=");
+_c = SubScreen;
+var _c;
+$RefreshReg$(_c, "SubScreen");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("D:/woodapp-project/woodapp-project/woodapp-react/src/pages/calculator/components/SubScreen.jsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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ZGF0ZVNlc3Npb24iLCJhdXRoVG9rZW4iLCJsb2dvdXQiLCJfcyIsImxvYWRpbmciLCJzZXRMb2FkaW5nIiwiY2hlY2tTdWJzY3JpcHRpb24iLCJ0aXRsZSIsImNscyIsInN0YXR1cyIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIlN1YlNjcmVlbi5qc3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgdXNlU3RhdGUgfSBmcm9tICdyZWFjdCc7XG5cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIFN1YlNjcmVlbih7IHN1YlN0YXR1cywgdmFsaWRhdGVTZXNzaW9uLCBhdXRoVG9rZW4sIGxvZ291dCB9KSB7XG4gIGNvbnN0IFtsb2FkaW5nLCBzZXRMb2FkaW5nXSA9IHVzZVN0YXRlKGZhbHNlKTtcblxuICBhc3luYyBmdW5jdGlvbiBjaGVja1N1YnNjcmlwdGlvbigpIHtcbiAgICBzZXRMb2FkaW5nKHRydWUpO1xuICAgIGF3YWl0IHZhbGlkYXRlU2Vzc2lvbihhdXRoVG9rZW4pO1xuICAgIHNldExvYWRpbmcoZmFsc2UpO1xuICB9XG5cbiAgcmV0dXJuIChcbiAgICA8ZGl2IGNsYXNzTmFtZT1cInNjcmVlbiBzdWItc2NyZWVuXCI+XG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cInN1Yi1oZXJvXCI+XG4gICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImV5ZWJyb3dcIj5TdWJzY3JpcHRpb24gZ2F0ZTwvc3Bhbj5cbiAgICAgICAgPGgyPntzdWJTdGF0dXMudGl0bGV9PC9oMj5cbiAgICAgIDwvZGl2PlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cInN1Yi1jYXJkXCI+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwic3ViLXJvd1wiPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInN1Yi1sYWJlbFwiPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPm88L2k+U3RhdHVzPC9zcGFuPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17YHN1Yi12YWx1ZSAke3N1YlN0YXR1cy5jbHN9YH0+e3N1YlN0YXR1cy5zdGF0dXN9PC9zcGFuPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJzdWItcm93XCI+XG4gICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwic3ViLWxhYmVsXCI+PGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+JDwvaT5QbGFuPC9zcGFuPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInN1Yi12YWx1ZVwiPiQ0Ljk5IC8gMzAgZGF5czwvc3Bhbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwic3ViLXJvd1wiPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInN1Yi1sYWJlbFwiPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPiM8L2k+RGFpbHkgU2NhbnM8L3NwYW4+XG4gICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwic3ViLXZhbHVlXCI+MjAwIHBlciBkYXk8L3NwYW4+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInN1Yi1yb3dcIj5cbiAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJzdWItbGFiZWxcIj48aSBhcmlhLWhpZGRlbj1cInRydWVcIj4lPC9pPlBheW1lbnQ8L3NwYW4+XG4gICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwic3ViLXZhbHVlXCI+UGF5UGFsIC8gQmFuayBUcmFuc2Zlcjwvc3Bhbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwic3ViLXJvd1wiPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInN1Yi1sYWJlbFwiPjxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPio8L2k+QWN0aXZhdGlvbjwvc3Bhbj5cbiAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJzdWItdmFsdWVcIj5XaXRoaW4gMSBob3VyPC9zcGFuPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJzdWItcm93XCI+XG4gICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwic3ViLWxhYmVsXCI+PGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+QDwvaT5Db250YWN0PC9zcGFuPlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInN1Yi12YWx1ZVwiPnlvdXItZW1haWxAZXhhbXBsZS5jb208L3NwYW4+XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxkaXYgY2xhc3NOYW1lPVwic3ViLWFjdGlvbnNcIj5cbiAgICAgICAgPGJ1dHRvbiBjbGFzc05hbWU9XCJidG4tcHJpbWFyeVwiIG9uQ2xpY2s9e2NoZWNrU3Vic2NyaXB0aW9ufSBkaXNhYmxlZD17bG9hZGluZ30+XG4gICAgICAgICAgPGkgYXJpYS1oaWRkZW49XCJ0cnVlXCI+e2xvYWRpbmcgPyAnLi4uJyA6ICc/J308L2k+XG4gICAgICAgICAge2xvYWRpbmcgPyAnQ2hlY2tpbmcuLi4nIDogJ0NoZWNrIFN0YXR1cyd9XG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgICA8YnV0dG9uIGNsYXNzTmFtZT1cImJ0bi1zZWNvbmRhcnlcIiBvbkNsaWNrPXtsb2dvdXR9PlxuICAgICAgICAgIDxpIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPiZsdDs8L2k+XG4gICAgICAgICAgU2lnbiBPdXRcbiAgICAgICAgPC9idXR0b24+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgKTtcbn1cbiJdLCJmaWxlIjoiRDovd29vZGFwcC1wcm9qZWN0L3dvb2RhcHAtcHJvamVjdC93b29kYXBwLXJlYWN0L3NyYy9wYWdlcy9jYWxjdWxhdG9yL2NvbXBvbmVudHMvU3ViU2NyZWVuLmpzeCJ9

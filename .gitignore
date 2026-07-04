@@ -25,3 +25,8 @@ woodapp-project/woodapp-react/android/local.properties
 # OS files
 .DS_Store
 Thumbs.db
+.edge-cdp-codex/
+.edge-profile-codex/
+node_modules/
+dist/
+build/

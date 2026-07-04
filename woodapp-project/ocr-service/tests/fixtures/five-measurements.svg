@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">
+  <rect width="600" height="900" fill="#fbfaf4"/>
+  <path d="M85 92h360M82 188h355M80 284h358M82 380h360M84 476h354" stroke="#ece5d6" stroke-width="3"/>
+  <g fill="#1d56a5" font-family="Comic Sans MS, Segoe Print, cursive" font-size="58" transform="rotate(-1 260 300)">
+    <text x="120" y="160">4 x 12</text>
+    <text x="120" y="250">5 x 14</text>
+    <text x="120" y="340">3 x 17</text>
+    <text x="120" y="430">2 x 13</text>
+    <text x="120" y="520">6 x 12</text>
+  </g>
+</svg>

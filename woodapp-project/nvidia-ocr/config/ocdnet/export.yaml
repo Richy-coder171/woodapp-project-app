@@ -1,8 +1,0 @@
-# Verify with `tao model ocdnet export --help`.
-model:
-  checkpoint: nvidia-ocr/models/checkpoints/ocdnet/best
-export:
-  output_file: nvidia-ocr/models/exported/ocdnet.onnx
-  input_width: 960
-  input_height: 960
-  batch_size: 1

@@ -37,11 +37,8 @@ const SUBSCRIPTION_AMOUNT_INR = readPositiveNumber(process.env.SUBSCRIPTION_AMOU
 const SUBSCRIPTION_AMOUNT_PAISE = Math.round(SUBSCRIPTION_AMOUNT_INR * 100);
 const OCR_SERVICE_URL = String(process.env.OCR_SERVICE_URL || 'http://localhost:8000').trim().replace(/\/+$/, '');
 const DOMAIN_OCR_SERVICE_URL = String(process.env.DOMAIN_OCR_SERVICE_URL || OCR_SERVICE_URL).trim().replace(/\/+$/, '');
-const NVIDIA_OCR_SERVICE_URL = String(process.env.NVIDIA_OCR_SERVICE_URL || OCR_SERVICE_URL).trim().replace(/\/+$/, '');
 const SCANNER_ENGINE = String(process.env.SCANNER_ENGINE || 'rapidocr').trim().toLowerCase();
 const OCR_TIMEOUT_MS = readPositiveInt(process.env.OCR_TIMEOUT_MS, 45000);
-const NVIDIA_OCR_TIMEOUT_MS = readPositiveInt(process.env.NVIDIA_OCR_TIMEOUT_MS, 180000);
-const NVIDIA_FALLBACK_TO_RAPIDOCR = String(process.env.NVIDIA_FALLBACK_TO_RAPIDOCR || 'false').trim().toLowerCase() === 'true';
 
 const DAILY_SCAN_LIMIT = 200;
 
@@ -402,15 +399,14 @@ const normalizeOcrResponse = (payload) => {
 const requestOcrRecognition = async ({ buffer, mimeType, filename, scannerEngine }) => {
   const controller = new AbortController();
   const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
-  const timeoutMs = effectiveEngine === 'nvidia' ? NVIDIA_OCR_TIMEOUT_MS : OCR_TIMEOUT_MS;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
 
   try {
     const form = new FormData();
     form.append('file', new Blob([buffer], { type: mimeType || 'image/jpeg' }), filename || safeImageFilename('', mimeType));
 
-    const scannerUrl = effectiveEngine === 'nvidia' ? NVIDIA_OCR_SERVICE_URL : (effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL);
-    const scannerPath = effectiveEngine === 'nvidia' ? '/recognize-nvidia' : (effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize');
+    const scannerUrl = effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL;
+    const scannerPath = effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize';
     const response = await fetch(`${scannerUrl}${scannerPath}`, {
       method: 'POST',
       body: form,
@@ -421,20 +417,6 @@ const requestOcrRecognition = async ({ buffer, mimeType, filename, scannerEngine
     const data = safeJsonParse(responseText) || {};
 
     if (!response.ok) {
-      if (effectiveEngine === 'nvidia' && NVIDIA_FALLBACK_TO_RAPIDOCR) {
-        const fallbackResponse = await fetch(`${OCR_SERVICE_URL}/recognize`, {
-          method: 'POST',
-          body: form,
-          signal: controller.signal
-        });
-        const fallbackText = await fallbackResponse.text();
-        const fallbackData = safeJsonParse(fallbackText) || {};
-        if (fallbackResponse.ok) {
-          const normalized = normalizeOcrResponse(fallbackData);
-          console.info('NVIDIA OCR failed; explicit RapidOCR fallback returned detections:', normalized.detections.length);
-          return normalized;
-        }
-      }
       const err = new Error(publicOcrError(response.status, data.detail));
       err.status = response.status;
       err.code = ocrErrorCode(response.status, data.detail);
@@ -776,7 +758,7 @@ app.post('/api/scan', auth, async (req, res) => {
 
       res.json({
         success: true,
-        scanner: SCANNER_ENGINE === 'nvidia' ? 'nvidia-tao-ocdnet-ocrnet-v1' : 'rapidocr-onnx',
+        scanner: 'rapidocr-onnx',
         status: ocr.status,
         imageWidth: ocr.imageWidth,
         imageHeight: ocr.imageHeight,
@@ -804,7 +786,7 @@ app.post('/api/test-scan', async (req, res) => {
     const image = parseImagePayload(imageBase64, mimeType, filename);
     image.scannerEngine = scannerEngine;
     const ocr = await requestOcrRecognition(image);
-    res.json({ success: true, scanner: SCANNER_ENGINE === 'nvidia' ? 'nvidia-tao-ocdnet-ocrnet-v1' : 'rapidocr-onnx', ...ocr });
+    res.json({ success: true, scanner: 'rapidocr-onnx', ...ocr });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message, code: err.code || 'OCR_FAILED' });
   }
@@ -1040,10 +1022,7 @@ app.get('/api/health', (req, res) => {
     scanner: {
       engine: SCANNER_ENGINE,
       ocrServiceUrlConfigured: Boolean(OCR_SERVICE_URL),
-      nvidiaOcrServiceUrlConfigured: Boolean(NVIDIA_OCR_SERVICE_URL),
-      timeoutMs: OCR_TIMEOUT_MS,
-      nvidiaTimeoutMs: NVIDIA_OCR_TIMEOUT_MS,
-      nvidiaFallbackToRapidocr: NVIDIA_FALLBACK_TO_RAPIDOCR
+      timeoutMs: OCR_TIMEOUT_MS
     }
   });
 });

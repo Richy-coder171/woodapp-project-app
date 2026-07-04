@@ -1,9 +1,0 @@
-{
-  "engine": "nvidia-tao-ocdnet-ocrnet-v1",
-  "model": "woodapp-ocdnet.onnx",
-  "runtimeBackend": "onnx",
-  "providers": ["CPUExecutionProvider"],
-  "confidenceThreshold": 0.35,
-  "maxDetections": 100,
-  "outputStatus": "pending_real_export_verification"
-}

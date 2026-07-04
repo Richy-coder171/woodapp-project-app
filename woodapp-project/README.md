@@ -6,7 +6,7 @@ WoodApp is a full-stack wood volume calculator project with a React frontend, an
 
 - Frontend: React + Vite + Capacitor for Android
 - Backend: Node.js + Express + SQLite
-- OCR services: RapidOCR and optional NVIDIA TAO-based pipeline
+- OCR services: RapidOCR scanner service
 - Documentation: setup guides, deployment notes, and training resources
 
 ## 2. Project structure
@@ -14,7 +14,6 @@ WoodApp is a full-stack wood volume calculator project with a React frontend, an
 - backend/ — API server and database logic
 - woodapp-react/ — web app and Android app configuration
 - ocr-service/ — OCR scanner service and preprocessing tools
-- nvidia-ocr/ — optional NVIDIA TAO OCR pipeline assets and scripts
 - scripts/ — helper scripts for networking and Android fixes
 - datasets/ — sample data and annotation resources
 
@@ -86,8 +85,7 @@ npm run android:apk
 
 ## 7. OCR and scanner options
 
-- RapidOCR is the default scanner workflow.
-- The NVIDIA OCR pipeline is available in the nvidia-ocr folder for advanced training and deployment experiments.
+RapidOCR is the scanner workflow for WoodApp.
 
 ## 8. Main documentation
 
@@ -98,7 +96,6 @@ Use these documents for deeper instructions:
 - [RAPIDOCR_MIGRATION.md](RAPIDOCR_MIGRATION.md) — RapidOCR migration guide
 - [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) — Android scanner and APK guidance
 - [DOMAIN_SCANNER_ARCHITECTURE.md](DOMAIN_SCANNER_ARCHITECTURE.md) — domain scanner architecture
-- [NVIDIA_OCR_ARCHITECTURE.md](NVIDIA_OCR_ARCHITECTURE.md) — NVIDIA OCR pipeline overview
 
 ## 9. Troubleshooting
 

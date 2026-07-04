@@ -1,9 +1,0 @@
-{
-  "status": "models_not_installed",
-  "engine": "nvidia-tao-ocdnet-ocrnet-v1",
-  "detector": null,
-  "recognizer": null,
-  "dictionary": "woodapp_characters.txt",
-  "createdBy": "scaffold",
-  "accuracy": null
-}

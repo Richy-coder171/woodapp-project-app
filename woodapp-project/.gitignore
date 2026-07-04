@@ -16,12 +16,7 @@ __pycache__/
 *.log
 ocr-service/.venv/
 ocr-service/debug-output/
-ocr-service/models/nvidia/*.onnx
-ocr-service/models/nvidia/*.engine
-ocr-service/models/nvidia/*.etlt
-ocr-service/models/nvidia/*.pth
-ocr-service/models/nvidia/*.pt
-ocr-service/models/nvidia/*.ckpt
+nvidia-ocr/
 datasets/woodapp_measurements/pages/
 datasets/woodapp_measurements/annotations/
 datasets/woodapp_measurements/crops/

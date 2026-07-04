@@ -206,7 +206,7 @@ export default function AdminDashboard() {
                 style={styles.input}
                 value={apiInput}
                 onChange={event => setApiInput(event.target.value)}
-                placeholder="http://localhost:3001"
+                placeholder={API_ORIGIN}
               />
             </label>
             <label style={styles.fieldLabel}>

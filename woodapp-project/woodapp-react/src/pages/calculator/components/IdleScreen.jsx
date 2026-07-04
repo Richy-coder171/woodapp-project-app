@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const RADIUS_CHOICES = Array.from({ length: 73 }, (_, i) => 12 + i);
@@ -29,8 +29,9 @@ function totalOf(items) {
   return items.reduce((sum, item) => sum + item.value, 0);
 }
 
-export default function IdleScreen({ userInfo, userScans, startCamera, setScreen, logout }) {
+export default function IdleScreen({ userInfo, userScans, startCamera, handleUploadPhoto, setScreen, logout }) {
   const navigate = useNavigate();
+  const uploadRef = useRef(null);
   const [selectedRadius, setSelectedRadius] = useState(null);
   const [selectedHeight, setSelectedHeight] = useState(null);
   const [manualEntries, setManualEntries] = useState([]);
@@ -93,6 +94,16 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
     setSelectedHeight(null);
   }
 
+  function pickUpload(event) {
+    const file = event.target.files?.[0];
+    if (file) handleUploadPhoto(file);
+    event.target.value = '';
+  }
+
+  function takePhoto() {
+    startCamera();
+  }
+
   return (
     <div className="screen idle-screen">
       <div className="idle-panel">
@@ -106,9 +117,22 @@ export default function IdleScreen({ userInfo, userScans, startCamera, setScreen
         <div className="idle-hint">Camera scan, editable rows, saved history.</div>
       </div>
 
-      <button className="btn-cta" onClick={() => startCamera()}>
+      <button className="btn-cta" onClick={takePhoto}>
         <i aria-hidden="true">[]</i>
-        Open Camera
+        Take Photo
+      </button>
+
+      <input
+        ref={uploadRef}
+        className="photo-upload-input"
+        type="file"
+        accept="image/*"
+        onChange={pickUpload}
+      />
+
+      <button className="btn btn-secondary upload-photo-btn" onClick={() => uploadRef.current?.click()}>
+        <i aria-hidden="true">+</i>
+        Upload Photo
       </button>
 
       <div className="idle-actions">

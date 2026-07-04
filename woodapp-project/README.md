@@ -4,6 +4,22 @@ Use this whenever your WiFi, hotspot, or PC network changes and the mobile app c
 
 For public internet deployment, use [DEPLOYMENT.md](DEPLOYMENT.md). This makes the app work from any network using a hosted HTTPS backend.
 
+## Scanner Update
+
+See [SCANNER_UPDATE.md](SCANNER_UPDATE.md) for the free multi-column OCR scanner setup, testing and deployment instructions.
+
+## RapidOCR Migration
+
+See [RAPIDOCR_MIGRATION.md](RAPIDOCR_MIGRATION.md) for the lightweight RapidOCR/ONNX scanner architecture, local testing, Render deployment, and rollback notes.
+
+## Domain Scanner Milestone
+
+See [DOMAIN_SCANNER_ARCHITECTURE.md](DOMAIN_SCANNER_ARCHITECTURE.md), [DATASET_ANNOTATION_GUIDE.md](DATASET_ANNOTATION_GUIDE.md), [MODEL_TRAINING_GUIDE.md](MODEL_TRAINING_GUIDE.md), [ONNX_DEPLOYMENT_GUIDE.md](ONNX_DEPLOYMENT_GUIDE.md), and [DOMAIN_SCANNER_TEST_REPORT.md](DOMAIN_SCANNER_TEST_REPORT.md) for the separate domain-specific dense-page scanner milestone.
+
+## Android Scanner Update
+
+See [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) for Android camera, Capacitor, scanner testing, and APK build instructions.
+
 ## What Changed
 
 - The app no longer keeps the backend IP directly inside the main config file.

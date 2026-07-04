@@ -380,6 +380,7 @@ const normalizeOcrResponse = (payload) => {
       rawText: String(item.rawText || ''),
       normalizedText: String(item.normalizedText || item.rawText || ''),
       confidence: Number.isFinite(Number(item.confidence)) ? Number(item.confidence) : 0,
+      valid: item.valid !== false,
       selected: item.selected !== false,
       columnIndex: Number.isFinite(Number(item.columnIndex)) ? Number(item.columnIndex) : 0,
       rowIndex: Number.isFinite(Number(item.rowIndex)) ? Number(item.rowIndex) : index,
@@ -397,13 +398,13 @@ const normalizeOcrResponse = (payload) => {
 
 const requestOcrRecognition = async ({ buffer, mimeType, filename, scannerEngine }) => {
   const controller = new AbortController();
+  const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
   const timeout = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
 
   try {
     const form = new FormData();
     form.append('file', new Blob([buffer], { type: mimeType || 'image/jpeg' }), filename || safeImageFilename('', mimeType));
 
-    const effectiveEngine = process.env.NODE_ENV !== 'production' && scannerEngine ? String(scannerEngine).toLowerCase() : SCANNER_ENGINE;
     const scannerUrl = effectiveEngine === 'domain' ? DOMAIN_OCR_SERVICE_URL : OCR_SERVICE_URL;
     const scannerPath = effectiveEngine === 'domain' ? '/recognize-domain' : '/recognize';
     const response = await fetch(`${scannerUrl}${scannerPath}`, {
@@ -1019,7 +1020,7 @@ app.get('/api/health', (req, res) => {
         : null
     },
     scanner: {
-      engine: 'rapidocr-onnx',
+      engine: SCANNER_ENGINE,
       ocrServiceUrlConfigured: Boolean(OCR_SERVICE_URL),
       timeoutMs: OCR_TIMEOUT_MS
     }
@@ -1029,7 +1030,7 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'WoodApp API', version: '1.0.0',
-    scanner: 'rapidocr-onnx',
+    scanner: SCANNER_ENGINE,
     endpoints: ['POST /api/register','POST /api/login','GET /api/auth/google/config','POST /api/auth/google','GET /api/me','POST /api/payment/request','POST /api/payment/submit-utr','GET /api/payment/status','POST /api/scan','POST /api/test-scan','POST /api/save-scan','GET /api/history','POST /api/admin/extend','GET /api/admin/users','GET /api/admin/payments','POST /api/admin/payments/:id/approve','POST /api/admin/payments/:id/reject','GET /api/health']
   });
 });

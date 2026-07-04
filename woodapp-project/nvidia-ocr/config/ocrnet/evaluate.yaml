@@ -1,9 +1,0 @@
-# Verify with `tao model ocrnet evaluate --help`.
-model:
-  checkpoint: nvidia-ocr/models/checkpoints/ocrnet/best
-dataset:
-  dictionary: nvidia-ocr/dictionaries/woodapp_characters.txt
-  test_manifest: nvidia-ocr/data/manifests/test.jsonl
-evaluate:
-  batch_size: 32
-  output_dir: nvidia-ocr/reports/ocrnet-evaluate

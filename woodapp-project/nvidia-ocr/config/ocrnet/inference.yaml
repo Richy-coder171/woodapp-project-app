@@ -1,9 +1,0 @@
-# Verify with `tao model ocrnet inference --help`.
-model:
-  checkpoint: nvidia-ocr/models/checkpoints/ocrnet/best
-dataset:
-  dictionary: nvidia-ocr/dictionaries/woodapp_characters.txt
-inference:
-  input_dir: nvidia-ocr/data/recognition-crops
-  output_dir: nvidia-ocr/reports/ocrnet-inference
-  batch_size: 32

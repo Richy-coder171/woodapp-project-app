@@ -4,18 +4,19 @@ export function normalizeDetections(items = []) {
   return items.map((item, index) => ({
     ...item,
     id: item.id || `measurement-${index + 1}`,
-    selected: item.selected !== false,
+    valid: item.valid !== false,
+    selected: item.valid === false ? false : item.selected !== false,
   }));
 }
 
 export function toggleMeasurement(items, id) {
   return items.map(item =>
-    item.id === id ? { ...item, selected: !item.selected } : item
+    item.id === id && item.valid !== false ? { ...item, selected: !item.selected } : item
   );
 }
 
 export function selectAllMeasurements(items) {
-  return items.map(item => ({ ...item, selected: true }));
+  return items.map(item => ({ ...item, selected: item.valid !== false }));
 }
 
 export function clearAllMeasurements(items) {
@@ -27,7 +28,7 @@ export function getSelectedCount(items) {
 }
 
 export function getMeasurementBoxClass(item) {
-  return item.selected ? 'measurement-box selected' : 'measurement-box unselected';
+  return item.selected && item.valid !== false ? 'measurement-box selected' : 'measurement-box unselected';
 }
 
 export function getOverlayViewBox(imageWidth, imageHeight) {
@@ -37,7 +38,7 @@ export function getOverlayViewBox(imageWidth, imageHeight) {
 }
 
 export function calculateSelectedDetections(items) {
-  const selected = items.filter(item => item.selected);
+  const selected = items.filter(item => item.selected && item.valid !== false);
 
   if (selected.length === 0) {
     return {

@@ -11,7 +11,9 @@ test('scan route uses the OCR service endpoint', () => {
   assert.match(serverSource, /SCANNER_ENGINE/);
   assert.match(serverSource, /\/recognize/);
   assert.match(serverSource, /\/recognize-domain/);
-  assert.match(serverSource, /scanner: 'rapidocr-onnx'/);
+  assert.doesNotMatch(serverSource, /\/recognize-nvidia/);
+  assert.doesNotMatch(serverSource, /NVIDIA_OCR_SERVICE_URL/);
+  assert.doesNotMatch(serverSource, /nvidia-tao-ocdnet-ocrnet-v1/);
 });
 
 test('Gemini and Groq are removed from the backend scanner path', () => {

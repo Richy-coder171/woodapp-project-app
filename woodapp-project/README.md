@@ -1,176 +1,110 @@
-# WoodApp Network Setup
+# WoodApp Project Manual
 
-Use this whenever your WiFi, hotspot, or PC network changes and the mobile app cannot reach the backend.
+WoodApp is a full-stack wood volume calculator project with a React frontend, an Express backend, and optional OCR/scanner pipelines for document processing.
 
-For public internet deployment, use [DEPLOYMENT.md](DEPLOYMENT.md). This makes the app work from any network using a hosted HTTPS backend.
+## 1. What this project contains
 
-## Scanner Update
+- Frontend: React + Vite + Capacitor for Android
+- Backend: Node.js + Express + SQLite
+- OCR services: RapidOCR scanner service
+- Documentation: setup guides, deployment notes, and training resources
 
-See [SCANNER_UPDATE.md](SCANNER_UPDATE.md) for the free multi-column OCR scanner setup, testing and deployment instructions.
+## 2. Project structure
 
-## RapidOCR Migration
+- backend/ — API server and database logic
+- woodapp-react/ — web app and Android app configuration
+- ocr-service/ — OCR scanner service and preprocessing tools
+- scripts/ — helper scripts for networking and Android fixes
+- datasets/ — sample data and annotation resources
 
-See [RAPIDOCR_MIGRATION.md](RAPIDOCR_MIGRATION.md) for the lightweight RapidOCR/ONNX scanner architecture, local testing, Render deployment, and rollback notes.
+## 3. Requirements
 
-## Domain Scanner Milestone
+Before running the project, make sure you have:
 
-See [DOMAIN_SCANNER_ARCHITECTURE.md](DOMAIN_SCANNER_ARCHITECTURE.md), [DATASET_ANNOTATION_GUIDE.md](DATASET_ANNOTATION_GUIDE.md), [MODEL_TRAINING_GUIDE.md](MODEL_TRAINING_GUIDE.md), [ONNX_DEPLOYMENT_GUIDE.md](ONNX_DEPLOYMENT_GUIDE.md), and [DOMAIN_SCANNER_TEST_REPORT.md](DOMAIN_SCANNER_TEST_REPORT.md) for the separate domain-specific dense-page scanner milestone.
+- Node.js 18 or newer
+- npm
+- PowerShell on Windows
+- Android Studio (only if you want to build the APK)
 
-## Android Scanner Update
+## 4. Quick start
 
-See [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) for Android camera, Capacitor, scanner testing, and APK build instructions.
+### Backend
 
-## What Changed
+```powershell
+cd D:\woodapp-project\woodapp-project\backend
+npm install
+npm run dev
+```
 
-- The app no longer keeps the backend IP directly inside the main config file.
-- The current network IP is stored in `woodapp-react/src/localNetwork.js`.
-- Run one command to update that file automatically.
-- Current detected PC IP: `10.24.57.103`.
+The backend will run on port 3001.
 
-## Quick Fix After Changing Network
-
-1. Connect your PC and phone to the same WiFi or same mobile hotspot.
-2. Open PowerShell in this folder:
-
-   ```powershell
-   cd D:\woodapp-project\woodapp-project\woodapp-react
-   ```
-
-3. Update the app network config:
-
-   ```powershell
-   npm run network:update
-   ```
-
-4. Start the backend:
-
-   ```powershell
-   cd ..\backend
-   npm run dev
-   ```
-
-5. Start the frontend:
-
-   ```powershell
-   cd ..\woodapp-react
-   npm run dev -- --host 0.0.0.0
-   ```
-
-6. Open the app on your phone browser using the IP printed by the command:
-
-   ```text
-   http://YOUR_PC_IP:5173
-   ```
-
-   Example for the current network:
-
-   ```text
-   http://10.24.57.103:5173
-   ```
-
-7. Test the backend from the phone browser:
-
-   ```text
-   http://YOUR_PC_IP:3001/api/health
-   ```
-
-   If it shows JSON with `"status":"ok"`, the phone can reach the backend.
-
-## Android APK After Network Change
-
-If you are using the installed Android app/APK, rebuild and sync after updating the network:
+### Frontend
 
 ```powershell
 cd D:\woodapp-project\woodapp-project\woodapp-react
-npm run android:refresh-network
+npm install
+npm run dev -- --host 0.0.0.0
 ```
 
-Then open Android Studio or rebuild/install the APK again.
+Open the app in your browser at:
 
-## Manual IP Override
+```text
+http://localhost:5173
+```
 
-If automatic detection chooses the wrong adapter, pass the IP manually:
+To check the backend health, open:
+
+```text
+http://localhost:3001/api/health
+```
+
+## 5. Local phone testing
+
+If you want to test the app from a phone on the same network:
 
 ```powershell
-cd D:\woodapp-project\woodapp-project\woodapp-react
-npm run network:update -- -IpAddress 192.168.1.50
-```
-
-You can find the correct IP with:
-
-```powershell
-ipconfig
-```
-
-Look under `Wireless LAN adapter Wi-Fi` for `IPv4 Address`.
-
-## Common Problems
-
-- Phone and PC must be on the same WiFi/hotspot.
-- Keep backend running on port `3001`.
-- Keep frontend running on port `5173`.
-- Allow Node.js through Windows Firewall for private networks.
-- If the phone can open `http://YOUR_PC_IP:5173` but not `http://YOUR_PC_IP:3001/api/health`, the backend or firewall is the problem.
-
-## Google Sign-In Setup
-
-1. Create a Google OAuth Client ID in Google Cloud Console.
-2. For browser testing, choose `Web application`.
-3. Add these Authorized JavaScript origins:
-
-   ```text
-   http://localhost:5173
-   http://10.24.57.103:5173
-   ```
-
-   After a network change, also add the new phone URL shown by `npm run network:update`.
-
-4. Add the client ID to `backend\.env`:
-
-   ```env
-   GOOGLE_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
-   ```
-
-   If your file already has `VITE_GOOGLE_CLIENT_ID`, the backend will read that too.
-
-5. Restart the backend:
-
-   ```powershell
-   cd D:\woodapp-project\woodapp-project\backend
-   npm run dev
-   ```
-
-The app uses Google only to verify the account email. It never asks for or stores the Google password.
-
-## Android Google Sign-In
-
-The Android app uses the native Google account picker. If Android shows `Google sign-in failed: 10`, create an Android OAuth Client ID in the same Google Cloud project:
-
-1. Application type: `Android`.
-2. Package name:
-
-   ```text
-   com.woodapp.calculator
-   ```
-
-3. Add your debug app signing certificate SHA-1:
-
-   ```text
-   7D:93:22:DF:55:64:3A:D8:B8:8B:3F:5B:82:B4:8E:9F:29:80:A0:74
-   ```
-
-4. Rebuild and install the APK again:
-
-   ```powershell
-   cd D:\woodapp-project\woodapp-project\woodapp-react
-   npm run build
-   npm run android:sync
-   ```
-
 cd D:\woodapp-project\woodapp-project\woodapp-react
 npm run network:update
+```
+
+Then start the backend and frontend as shown above. Open the URL printed by the script, usually in the form:
+
+```text
+http://YOUR_PC_IP:5173
+```
+
+## 6. Android build
+
+To build and sync the Android app:
+
+```powershell
+cd D:\woodapp-project\woodapp-project\woodapp-react
 npm run android:refresh-network
+npm run android:apk
+```
 
+## 7. OCR and scanner options
 
+RapidOCR is the scanner workflow for WoodApp.
 
-Now deploy it to the web throught the render or the railway.com
+## 8. Main documentation
+
+Use these documents for deeper instructions:
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) — public deployment guide
+- [SCANNER_UPDATE.md](SCANNER_UPDATE.md) — OCR scanner update notes
+- [RAPIDOCR_MIGRATION.md](RAPIDOCR_MIGRATION.md) — RapidOCR migration guide
+- [ANDROID_SCANNER_UPDATE.md](ANDROID_SCANNER_UPDATE.md) — Android scanner and APK guidance
+- [DOMAIN_SCANNER_ARCHITECTURE.md](DOMAIN_SCANNER_ARCHITECTURE.md) — domain scanner architecture
+
+## 9. Troubleshooting
+
+- Make sure the phone and PC are on the same Wi-Fi or hotspot.
+- Keep the backend running on port 3001.
+- Keep the frontend running on port 5173.
+- If the network changes, rerun the network update script.
+- If the app cannot reach the backend, check firewall settings and the local IP address.
+
+## 10. Deployment
+
+For web deployment, use a hosting provider such as Render or Railway and follow the deployment guide in [DEPLOYMENT.md](DEPLOYMENT.md).
